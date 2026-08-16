@@ -1,0 +1,21 @@
+node_modules
+dist
+export
+
+# never bake credentials or the ledger into an image
+.env
+.env.*
+!.env.example
+*.json.key
+*service-account*.json
+gcp-*.json
+*.db
+*.db-wal
+*.db-shm
+
+.git
+.gitignore
+.slack
+scratchpad
+*.md
+!README.md

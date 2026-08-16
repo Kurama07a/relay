@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "Merge these into your Claude Code settings.json (~/.claude/settings.json for",
+    "all projects, or .claude/settings.json inside one repo).",
+    "",
+    "Together these mean nobody starts or stops a timer by hand:",
+    "",
+    "  SessionStart  resumes whatever you were last doing in this directory, or",
+    "                the task named by your git branch. Silent if there is",
+    "                nothing to resume, so unrelated repos stay quiet.",
+    "  PostToolUse   keeps the session alive while you work. The CLI throttles",
+    "                this to one real call every two minutes; the rest cost a",
+    "                process start and nothing else.",
+    "  SessionEnd    closes the session when you quit, so time stops counting.",
+    "",
+    "All three are safe when nothing is running and when Relay is unreachable:",
+    "they exit 0 either way and never interrupt your session."
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "relay session-start"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "relay session-end"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "relay heartbeat"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+node_modules/
+dist/
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# sqlite ledger + WAL sidecars
+*.db
+*.db-wal
+*.db-shm
+
+# exported spreadsheets, and Google service account keys
+export/
+*service-account*.json
+gcp-*.json
+
+# Slack CLI: hooks.json is shared, but the app IDs it resolves are per-developer
+.slack/apps.json
+.slack/apps.dev.json
+.slack/cache/

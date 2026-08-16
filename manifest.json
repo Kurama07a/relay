@@ -1,0 +1,54 @@
+{
+  "display_information": {
+    "name": "Relay",
+    "description": "Routes client requests into engineering and tracks them as tasks.",
+    "background_color": "#1f2d3d",
+    "long_description": "Relay watches your client channels. When a client asks for something — a bug, a feature, a PR review — it posts the request into your engineering channel where a teammate claims it with a reaction. From that thread the team ships status updates and follow-up questions straight back into the client's own thread, so nobody has to copy messages between channels by hand."
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Relay",
+      "always_online": true
+    },
+    "slash_commands": [
+      {
+        "command": "/relay",
+        "description": "View the task ledger",
+        "usage_hint": "mine | open | all | done | stats | REL-12",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": [
+        "channels:history",
+        "groups:history",
+        "channels:read",
+        "groups:read",
+        "chat:write",
+        "reactions:read",
+        "reactions:write",
+        "users:read",
+        "im:write",
+        "commands"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "bot_events": [
+        "message.channels",
+        "message.groups",
+        "reaction_added",
+        "reaction_removed"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": true,
+    "token_rotation_enabled": false
+  }
+}

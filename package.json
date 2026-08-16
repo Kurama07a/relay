@@ -1,0 +1,49 @@
+{
+  "name": "relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Slack bot that relays client requests into an engineering channel and tracks them as tasks.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.scripts.json",
+    "channels": "tsx scripts/list-channels.ts",
+    "doctor": "tsx scripts/doctor.ts",
+    "setup:google": "node scripts/setup-google.mjs",
+    "preview": "tsx scripts/preview.ts",
+    "export": "tsx scripts/export.ts",
+    "sheet": "tsx scripts/push-sheet.ts",
+    "token": "tsx scripts/mint-token.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:api": "tsx scripts/api-smoke.ts",
+    "test": "npm run smoke && npm run smoke:api",
+    "google:env": "node scripts/google-env.mjs"
+  },
+  "bin": {
+    "relay": "bin/relay.mjs"
+  },
+  "files": [
+    "bin/",
+    "dist/"
+  ],
+  "dependencies": {
+    "@slack/bolt": "^4.2.0",
+    "@slack/types": "^2.14.0",
+    "@slack/web-api": "^7.8.0",
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "google-auth-library": "^11.0.2"
+  },
+  "devDependencies": {
+    "@slack/cli-hooks": "^2.0.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

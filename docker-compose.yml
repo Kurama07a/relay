@@ -1,0 +1,37 @@
+# Relay, for Coolify or plain `docker compose up -d`.
+#
+# Two things this file exists to get right:
+#   - the ledger survives redeploys (named volume at /data)
+#   - exactly one instance runs, because Socket Mode and SQLite both assume it
+services:
+  relay:
+    build: .
+    restart: unless-stopped
+
+    environment:
+      # Set these in Coolify's Environment Variables tab rather than here.
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN}
+
+      # Paste the whole service-account JSON as one value; no file to copy up.
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON:-}
+
+      DB_PATH: /data/relay.db
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # 127.0.0.1 keeps the engineer API inside the container. Change to 0.0.0.0
+      # only if you want the `relay` CLI to reach it from your laptop — Relay
+      # then requires a bearer token, and you must expose the port below.
+      API_HOST: ${API_HOST:-127.0.0.1}
+      API_PORT: "3737"
+
+    volumes:
+      - relay-data:/data
+
+    # Uncomment together with API_HOST=0.0.0.0 to use the CLI remotely.
+    # Put it behind Coolify's proxy with TLS rather than opening it directly.
+    # ports:
+    #   - "3737:3737"
+
+volumes:
+  relay-data:
