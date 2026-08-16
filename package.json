@@ -22,7 +22,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "smoke:api": "tsx scripts/api-smoke.ts",
     "test": "npm run smoke && npm run smoke:api",
-    "google:env": "node scripts/google-env.mjs"
+    "google:env": "node scripts/google-env.mjs",
+    "coolify": "node scripts/coolify.mjs"
   },
   "bin": {
     "relay": "bin/relay.mjs"
