@@ -108,8 +108,7 @@ ssh -N -L 3737:127.0.0.1:3737 you@your-vps
 Then, on your laptop:
 
 ```bash
-export RELAY_URL=http://127.0.0.1:3737
-export RELAY_USER=U0123ABCDEF     # your Slack member ID
+relay login --user U0123ABCDEF    # your Slack member ID
 relay tasks mine
 ```
 

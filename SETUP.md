@@ -15,7 +15,7 @@ workspace — if you don't have it, an admin will need to approve step 1.
 > you in `#test-client`, react as you in `#test-eng`.
 >
 > Set `API_ENABLED=false` in `.env` for this phase. The editor CLI and skill
-> (step 7) are a separate concern; leave them switched off until the Slack loop
+> (step 8) are a separate concern; leave them switched off until the Slack loop
 > behaves.
 
 ## 1. Create the Slack app
@@ -90,7 +90,8 @@ same as the bot token.
 | `channels:read`, `groups:read` | resolving channel names, and the startup membership check |
 | `chat:write` | posting relays, thread updates, ephemeral errors |
 | `reactions:read`, `reactions:write` | the claim/dismiss triage reactions and command acknowledgements |
-| `users:read` | showing real names instead of raw user IDs |
+| `users:read` | showing real names instead of raw user IDs, and reading workspace admin status |
+| `im:write` | direct-messaging config changes when no control channel is set |
 | `commands` | the `/relay` slash command |
 
 Bot events: `message.channels`, `message.groups`, `reaction_added`,
@@ -103,14 +104,14 @@ npm install
 cp .env.example .env
 ```
 
-Put both tokens in `.env`, then find your channel IDs:
+Put both tokens in `.env`. That's all `.env` needs — channel pairings are set
+from Slack in step 5, not here.
+
+To see which channels Relay can reach:
 
 ```bash
 npm run channels
 ```
-
-That prints every channel the bot can see, flagged with whether the bot is
-already a member:
 
 ```
 CHANNEL              ID           FLAGS
@@ -119,16 +120,10 @@ eng-inbox            C0123ABCD    bot-is-member
 acme-corp            C0456EFGH    NOT-A-MEMBER slack-connect
 ```
 
-Fill in `.env`:
-
-```
-INTERNAL_CHANNEL=C0123ABCD
-CLIENT_CHANNELS=C0456EFGH,C0789IJKL
-```
-
 ## 4. Invite the bot
 
-In **every** channel from step 3 — the internal one and each client channel:
+In **every** channel you plan to pair — each client channel and each team
+channel:
 
 ```
 /invite @Relay
@@ -164,32 +159,52 @@ Both start the same process — `.slack/hooks.json` points the CLI's `start` hoo
 at `npm run dev`. The difference is only where the tokens come from: `slack run`
 puts them in the environment, and `dotenv` leaves existing environment variables
 alone, so they take precedence over anything in `.env` without you editing
-files. Everything else (`INTERNAL_CHANNEL`, `CLIENT_CHANNELS`, `DB_PATH`) still
-comes from `.env` either way.
+files.
 
 You should see:
 
 ```
 INFO  relay is up (socket mode)
-INFO  ingest=all claim=:raised_hand: dismiss=:x: prefix=!
-INFO  watching #eng-inbox
-INFO  watching #acme-corp
+INFO  prefix=! claim=:raised_hand:/:hand: dismiss=:x:
+WARN  no channel pairings configured — run /relay setup in Slack to add one
 ```
 
-## 6. Check it end to end
+## 6. Pair your channels
 
-1. Post a message in a client channel: *"the export button is broken"*.
-2. It should get a 👀 reaction, and a `🐞 REL-1 · Bug` card should appear in
-   your internal channel with ✋ and ❌ already on it.
-3. React ✋ on the card. You get assigned; the client's thread gets *"👋 …has
-   picked this up — tracked as REL-1"*.
-4. In the card's thread, run `!start`, then `!done fixed`.
-5. Check the client thread — it should have the full sequence.
+In Slack:
+
+```
+/relay setup
+```
+
+Click **Add pairing**, pick the client channel and the team channel, and submit.
+Relay checks it's a member of both and refuses pairings that would loop.
+
+Add as many as you have clients — each client channel routes to its own team
+channel, and they can share one or have their own.
+
+The log should now show:
+
+```
+INFO  watching #acme-corp
+INFO  watching #eng-inbox
+```
+
+## 7. Check it end to end
+
+1. Post a message in the client channel: *"the export button is broken"*.
+2. It should get a 👀 reaction, and a `🐞 Checkout is broken` card should appear
+   in the team channel with ✋ and ❌ already on it.
+3. React ✋ on the card. You get assigned, and the client's thread gets
+   *"👋 …is picking this up."*
+4. In the card's thread, run `!start`, then `!done fixed it`.
+5. Check the client thread — it should have the full sequence, ending with the
+   rounded time it took.
 6. Run `/relay` to see the ledger.
 
-Then delete the test task's messages if you ran this in a live client channel.
+Then delete the test messages if you ran this in a live client channel.
 
-## 7. Wire up Claude Code / Codex (optional)
+## 8. Wire up Claude Code / Codex (optional)
 
 This is what removes the trip to Slack entirely. Relay serves an API on
 `127.0.0.1:3737` by default; the `relay` CLI talks to it.
@@ -201,12 +216,15 @@ npm link          # from this directory, puts `relay` on your PATH
 relay me          # should print your name and "no session running"
 ```
 
-**Tell it who you are.** Slack profile → **More** → **Copy member ID**:
+**Sign in.** Your Slack member ID is in your profile under **More → Copy member
+ID**:
 
 ```bash
-# add to your shell profile
-export RELAY_USER=U0123ABCD
+relay login --user U0123ABCD          # Relay on this same machine
+relay login --token relay_xxxx --url http://relay.internal:3737   # remote
 ```
+
+Saved to `~/.relay/config.json` and verified immediately.
 
 **Install the skill** so Claude Code knows the workflow:
 
@@ -216,8 +234,9 @@ cp skill/SKILL.md ~/.claude/skills/relay/SKILL.md
 ```
 
 **Automate session timing** by merging `skill/hooks.example.json` into
-`~/.claude/settings.json`. `SessionEnd` is the important one — it stops the
-clock when you quit, so you never have to remember to.
+`~/.claude/settings.json`. Together the three hooks mean nobody starts or stops
+a timer: opening a project resumes what you were doing there, working keeps the
+session alive, and quitting closes it.
 
 Try it:
 
@@ -337,8 +356,9 @@ whereas copying a file mid-write can capture a torn state.
 ## Troubleshooting
 
 **Nothing happens when a client posts.**
-The bot isn't in the channel (step 4), the channel ID isn't in `CLIENT_CHANNELS`,
-or `INGEST_MODE=mention` is set and the message didn't @-mention the bot. Start
+The bot isn't in the channel (step 4), the channel isn't paired (step 6),
+or that pairing is set to mention-only and the message didn't @-mention the bot.
+Check with `/relay setup`. Start
 with `LOG_LEVEL=debug`.
 
 **A message from earlier never got relayed.**
@@ -372,13 +392,13 @@ config and token. In order of likelihood:
 
    Add it with `CLAIM_EMOJI=raised_hand,point_up` if you want another to work.
 
-3. **`INTERNAL_CHANNEL` is a DM.** Relay subscribes to `message.channels` and
+3. **The team channel is a DM.** Relay subscribes to `message.channels` and
    `message.groups` only, so a direct message — including the "note to self" DM
    — delivers no reaction events at all, even though posting into it works
    fine. That combination looks exactly like this bug: relays appear, reactions
    do nothing. Use a real channel, public or private.
 
-4. **`INTERNAL_CHANNEL` is a name, not an ID.** `chat.postMessage` accepts
+4. **The pairing points somewhere unexpected.** `chat.postMessage` accepts
    `#some-channel`, so relaying works, but the incoming reaction event carries
    the channel *ID* and won't match. It must be the `C…`/`G…` ID.
 
