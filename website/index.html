@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Relay keeps client requests and engineering work in sync across Slack, without copy-paste or lost context." />
+    <meta name="theme-color" content="#1b241b" />
+    <meta property="og:title" content="Relay — Client asks. Engineering moves." />
+    <meta property="og:description" content="An open-source Slack bot for triage, handoffs, time tracking, and calm client updates." />
+    <title>Relay — Keep client requests and engineering work in sync</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav-shell" aria-label="Main navigation">
+        <a class="brand" href="index.html" aria-label="Relay home">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+            <rect width="64" height="64" rx="14" fill="#1b241b" />
+            <path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round" />
+            <circle cx="17" cy="19" r="6" fill="#ffd34e" />
+            <circle cx="17" cy="49" r="6" fill="#d9ef75" />
+          </svg>
+          Relay
+        </a>
+        <button class="menu-button" type="button" aria-label="Toggle navigation" aria-expanded="false" data-menu-button><span></span></button>
+        <div class="nav-menu" data-menu data-open="false">
+          <a href="index.html" aria-current="page">Home</a>
+          <a href="about.html">About</a>
+          <a href="features.html">Features</a>
+          <a href="setup.html">How to set up</a>
+          <a class="nav-github" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">GitHub ↗</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="hero-copy" data-reveal>
+          <p class="eyebrow">Open-source Slack operations bot</p>
+          <h1>Client asks. <em>Engineering moves.</em></h1>
+          <p>Relay turns client messages into owned engineering work, keeps both threads in sync, and records the useful history without making anyone become a project manager.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#flow">See the flow <span aria-hidden="true">↓</span></a>
+            <a class="button button-secondary" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">View source <span aria-hidden="true">↗</span></a>
+          </div>
+          <ul class="hero-facts" aria-label="Product facts">
+            <li>Slack Socket Mode</li>
+            <li>SQLite ledger</li>
+            <li>CLI + agent skill</li>
+          </ul>
+        </div>
+
+        <div class="relay-board" data-relay-demo data-step="triage" data-reveal>
+          <div class="board-topline">
+            <span>Live handoff / REL-7</span>
+            <span class="board-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+          </div>
+          <svg class="relay-route" viewBox="0 0 600 280" preserveAspectRatio="none" aria-hidden="true">
+            <path class="route-base" d="M30 115 C170 20 390 260 570 110" />
+            <path class="route-active" d="M30 115 C170 20 390 260 570 110" />
+            <circle class="signal-dot" cx="300" cy="147" r="5" />
+          </svg>
+          <div class="relay-columns">
+            <article class="relay-panel client-panel">
+              <div class="panel-label"><span>Client / #acme</span></div>
+              <div class="message-row">
+                <span class="avatar">JD</span>
+                <div><strong>Jane</strong><p>Checkout is broken. It throws a 500 when I submit.</p></div>
+              </div>
+              <div class="relay-response" data-client-status aria-live="polite">Seen by Relay</div>
+            </article>
+            <article class="relay-panel team-panel">
+              <div class="panel-label"><span>Team / #eng-acme</span></div>
+              <div class="task-card">
+                <strong data-team-title>Checkout throws a 500</strong>
+                <small data-team-meta>REL-7 · Bug · Jane in #acme</small>
+                <span data-team-status>Needs triage · unassigned</span>
+              </div>
+            </article>
+          </div>
+          <div class="board-controls">
+            <p data-demo-note aria-live="polite">A client message becomes a focused triage card.</p>
+            <button class="demo-button" type="button" data-demo-action>Claim request</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="trust-strip" aria-label="Relay architecture">
+        <div class="trust-strip-inner">
+          <div class="trust-item"><strong>No public webhook</strong><span>Outbound Socket Mode</span></div>
+          <div class="trust-item"><strong>One clear owner</strong><span>Claim with a reaction</span></div>
+          <div class="trust-item"><strong>Safe by default</strong><span>Internal unless sent</span></div>
+          <div class="trust-item"><strong>Exact inside</strong><span>Calm summaries outside</span></div>
+        </div>
+      </aside>
+
+      <section class="section" id="flow">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">The actual workflow</p>
+          <h2>Two threads. One piece of work.</h2>
+          <p>The client never leaves their conversation. The team gets a clean task thread with ownership, context, and commands.</p>
+        </div>
+        <div class="flow-grid">
+          <article class="flow-step" data-reveal>
+            <span class="step-id">01</span>
+            <h3>A request arrives</h3>
+            <p>Relay watches a paired client channel and creates a triage card in the right engineering channel.</p>
+          </article>
+          <article class="flow-step" data-reveal>
+            <span class="step-id">02</span>
+            <h3>Someone owns it</h3>
+            <p>A raised-hand reaction claims the request. <code>!start</code>, <code>!ask</code>, and <code>!block</code> keep the state honest.</p>
+          </article>
+          <article class="flow-step" data-reveal>
+            <span class="step-id">03</span>
+            <h3>Both sides stay current</h3>
+            <p>Intentional updates return to the original client thread. The task card and ledger update at the same time.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="feature-heading">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">Built around real handoffs</p>
+          <h2 id="feature-heading">Less status theatre. More useful signal.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card" data-reveal>
+            <span class="feature-icon">✋</span>
+            <h3>Triage by reaction</h3>
+            <p>Claim real work with a raised hand. Dismiss harmless chatter with a cross. Relay keeps the channel readable.</p>
+          </article>
+          <article class="feature-card" data-reveal>
+            <span class="feature-icon">!_</span>
+            <h3>Commands that mean what they say</h3>
+            <p>Start, pause, ask, reply, assign, block, and finish from the task thread—or use the same operations from the CLI.</p>
+          </article>
+          <article class="feature-card wide" data-reveal>
+            <div>
+              <h3>The boundary is deliberate.</h3>
+              <p>Ordinary team discussion stays internal. Only explicit <code>!ask</code> and <code>!reply</code> messages cross back to the client.</p>
+            </div>
+            <ul class="feature-list">
+              <li>Thread-scoped work history</li>
+              <li>Exact team effort, rounded client time</li>
+              <li>Append-only event log in SQLite</li>
+              <li>Optional Google Sheets mirror</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div class="split-copy" data-reveal>
+          <p class="eyebrow">Designed for trust</p>
+          <h2>Quiet automation, visible accountability.</h2>
+          <p>Relay automates the repetitive part without pretending context is automatic. People still decide what crosses the client boundary and when work is actually done.</p>
+          <div class="hero-actions"><a class="button button-secondary" href="about.html">Why Relay works <span aria-hidden="true">→</span></a></div>
+        </div>
+        <ol class="principle-list" data-reveal>
+          <li><b>01</b><div><strong>One clock per engineer</strong><span>Starting another task pauses the current one, so time cannot quietly double-count.</span></div></li>
+          <li><b>02</b><div><strong>Retries do not duplicate work</strong><span>Slack redelivery is safe because each client message maps to one task.</span></div></li>
+          <li><b>03</b><div><strong>The ledger survives the interface</strong><span>Task state, sessions, and events live in a persistent SQLite database.</span></div></li>
+        </ol>
+      </section>
+
+      <section class="section split-section">
+        <div class="code-window" data-reveal>
+          <div class="code-topbar"><span>Terminal / five minutes</span><button class="copy-button" type="button" data-copy="#quick-install">Copy</button></div>
+          <pre id="quick-install" tabindex="-1"><span class="comment"># install and configure</span>
+npm install
+cp .env.example .env
+
+<span class="comment"># start Relay locally</span>
+npm run dev
+
+<span class="comment"># verify the live Slack config</span>
+npm run doctor</pre>
+        </div>
+        <div class="split-copy" data-reveal>
+          <p class="eyebrow">Self-hosted and inspectable</p>
+          <h2>Run it where your client context belongs.</h2>
+          <p>Use Socket Mode locally or deploy the bot as a single Coolify service with a persistent <code>/data</code> volume. The public website remains just static files.</p>
+          <div class="hero-actions"><a class="button button-primary" href="setup.html">Open setup guide <span aria-hidden="true">→</span></a></div>
+        </div>
+      </section>
+
+      <section class="cta-wrap">
+        <div class="cta-panel" data-reveal>
+          <p class="eyebrow">Open source · ready to self-host</p>
+          <h2>Keep the work moving without losing the human thread.</h2>
+          <p>Read the code, test it in a throwaway workspace, and shape Relay around how your team already works.</p>
+          <div class="cta-actions">
+            <a class="button button-primary" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">Get Relay on GitHub <span aria-hidden="true">↗</span></a>
+            <a class="button button-secondary" href="features.html">Explore features</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-top">
+          <div class="footer-brand">
+            <a class="brand" href="index.html">
+              <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#fffef3"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>
+              Relay
+            </a>
+            <p>Client requests in. Engineering signal out. Everything useful stays connected.</p>
+          </div>
+          <nav class="footer-nav" aria-label="Product"><strong>Product</strong><a href="features.html">Features</a><a href="about.html">About</a></nav>
+          <nav class="footer-nav" aria-label="Resources"><strong>Resources</strong><a href="setup.html">Setup</a><a href="https://github.com/Kurama07a/relay/blob/main/README.md">Documentation</a></nav>
+          <nav class="footer-nav" aria-label="Source"><strong>Source</strong><a href="https://github.com/Kurama07a/relay">GitHub</a><a href="https://github.com/Kurama07a/relay/issues">Issues</a></nav>
+        </div>
+        <div class="footer-bottom"><span>Relay · Open-source Slack operations</span><span>Built for clear handoffs</span></div>
+      </div>
+    </footer>
+  </body>
+</html>
+

@@ -217,7 +217,7 @@ Then:  npm run coolify env  &&  npm run coolify deploy
       }
       const result = await api(`/applications/${app}/envs`, {
         method: "POST",
-        body: { key, value, is_preview: false, is_build_time: false, is_literal: true },
+        body: { key, value, is_preview: false},
       });
 
       if (result.ok) {
@@ -227,9 +227,25 @@ Then:  npm run coolify env  &&  npm run coolify deploy
       // Already present: update rather than duplicate.
       const update = await api(`/applications/${app}/envs`, {
         method: "PATCH",
-        body: { key, value, is_preview: false, is_build_time: false, is_literal: true },
+        body: { key, value, is_preview: false},
       });
-      console.log(update.ok ? `  update ${key}` : `  FAILED ${key} (HTTP ${result.status}/${update.status})`);
+      if (update.ok) {
+        console.log(`  update ${key}`);
+        continue;
+      }
+
+      // Show what the server objected to. A validation error that only says
+      // "422" is the least useful message a deploy tool can give you.
+      console.log(`  FAILED ${key}  POST ${result.status} / PATCH ${update.status}`);
+      for (const [label, response] of [["POST", result], ["PATCH", update]]) {
+        const detail = response.data;
+        if (!detail) continue;
+        const message =
+          typeof detail === "string"
+            ? detail.slice(0, 300)
+            : JSON.stringify(detail.errors ?? detail.message ?? detail).slice(0, 300);
+        console.log(`         ${label}: ${message}`);
+      }
     }
 
     console.log("\nValues are never printed here — check them in the Coolify UI if unsure.");
@@ -241,7 +257,9 @@ Then:  npm run coolify env  &&  npm run coolify deploy
       console.error("Set COOLIFY_APP_UUID in .env first.");
       process.exit(1);
     }
-    const result = await api(`/deploy?uuid=${encodeURIComponent(app)}&force=false`);
+    const result = await api(`/deploy?uuid=${encodeURIComponent(app)}&force=false`, {
+      method: "POST",
+    });
     if (!result.ok) fail("Could not trigger the deployment", result);
     console.log(`\nDeployment queued.\n${JSON.stringify(result.data, null, 2)}`);
     console.log(`\nWatch it:  npm run coolify status\n`);

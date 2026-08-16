@@ -1,11 +1,13 @@
 import { config, validateConfig } from "./config.js";
 import { log } from "./log.js";
-import { app, client, resolveBotIdentity } from "./slack/app.js";
+import { app, client, resolveBotIdentity, teamId } from "./slack/app.js";
 import { registerIngest } from "./slack/ingest.js";
 import { registerReactions } from "./slack/reactions.js";
 import { registerCommands } from "./slack/commands.js";
 import { migrateFromEnv, registerAdmin } from "./slack/admin.js";
-import { countRoutes, watchedChannels } from "./routes.js";
+import { countRoutes, listRoutes, watchedChannels } from "./routes.js";
+import * as settings from "./settings.js";
+import { ADMIN_USERS } from "./permissions.js";
 import { channelName } from "./slack/names.js";
 import { refreshInternalMessage } from "./slack/actions.js";
 import { countByStatus, getTask } from "./store.js";
@@ -66,6 +68,44 @@ function startSessionReaper(): NodeJS.Timeout {
   return timer;
 }
 
+/**
+ * Notices when the tokens have been repointed at a different workspace.
+ *
+ * Nothing in the ledger is workspace-scoped, so a swapped token silently leaves
+ * channel pairings, the control channel, and the admin list referring to ids
+ * that don't exist here. The admin list is the dangerous one: if it names users
+ * from the old workspace, nobody in the new one can run `/relay setup` unless
+ * they happen to be a workspace owner.
+ */
+function checkWorkspace(): void {
+  const known = settings.get("team_id");
+
+  if (!known) {
+    settings.set("team_id", teamId);
+    return;
+  }
+  if (known === teamId) return;
+
+  log.warn(
+    `this database belongs to workspace ${known} but the token is for ${teamId}. ` +
+      `Channel pairings, the control channel and the admin list all reference the ` +
+      `old workspace and will not work here.`,
+  );
+
+  const stale = [
+    listRoutes(true).length > 0 ? `${listRoutes(true).length} channel pairing(s)` : null,
+    settings.get(ADMIN_USERS) ? "an admin list" : null,
+    settings.get(settings.KEYS.controlChannel) ? "a control channel" : null,
+  ].filter(Boolean);
+
+  if (stale.length > 0) {
+    log.warn(
+      `carrying over ${stale.join(", ")} from the old workspace — start from an ` +
+        `empty volume, or clear them before using this instance`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   validateConfig();
 
@@ -101,6 +141,7 @@ async function main(): Promise<void> {
   await resolveBotIdentity();
 
   log.info("relay is up (socket mode)");
+  checkWorkspace();
   log.info(
     `ingest=${config.ingestMode} prefix=${config.commandPrefix} ` +
       `claim=${config.emoji.claim.accepts.map((name) => `:${name}:`).join("/")} ` +
