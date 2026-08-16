@@ -22,7 +22,7 @@ Skip if you don't want the spreadsheet mirror.
 
 ```bash
 gcloud auth login
-./scripts/setup-google.sh
+npm run setup:google
 ```
 
 That creates a project, enables the Sheets and Drive APIs, makes a service
@@ -33,7 +33,7 @@ For Coolify, don't copy the file to the server. Flatten it to one line and paste
 it as an environment variable instead:
 
 ```bash
-node -e "console.log(JSON.stringify(require('./gcp-service-account.json')))"
+npm run google:env
 ```
 
 ## 2. Create the app in Coolify
