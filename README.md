@@ -268,7 +268,7 @@ npm run export -- --out .   # somewhere else
 
 No Slack connection or tokens needed; it reads the database directly. User and
 channel IDs are rendered as real names, resolved once and cached, so the sheet
-says "Sam Patel" and "#acme-corp" rather than `U0BQF6LKRBP`.
+says "Sam Patel" and "#acme-corp" rather than `U0123ABCDEF`.
 
 Effort appears twice per row on purpose: `Effort` as `4h 22m` to read, and
 `Effort (hours)` as `4.37` so the spreadsheet can sum and average it.

@@ -109,7 +109,7 @@ Then, on your laptop:
 
 ```bash
 export RELAY_URL=http://127.0.0.1:3737
-export RELAY_USER=U0BQF6LKRBP     # your Slack member ID
+export RELAY_USER=U0123ABCDEF     # your Slack member ID
 relay tasks mine
 ```
 
