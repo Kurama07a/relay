@@ -93,8 +93,19 @@ export const config = {
   commandPrefix: optional("COMMAND_PREFIX", "!"),
 
   sessions: {
-    /** A session with no heartbeat for this long is closed at its last beat. */
+    /**
+     * An editor session with no heartbeat for this long is closed at its last
+     * beat. Only applies to sources that actually emit heartbeats.
+     */
     staleAfterMinutes: number("SESSION_STALE_MINUTES", 20),
+
+    /**
+     * Longest a session started from Slack may run. Nothing beats for those, so
+     * silence carries no information and they're capped by length instead —
+     * short enough that a forgotten `!start` can't bill overnight, long enough
+     * to cover a real working day on one task.
+     */
+    maxHours: number("SESSION_MAX_HOURS", 8),
     /** How often the reaper sweeps for abandoned sessions. */
     reapIntervalMinutes: number("SESSION_REAP_INTERVAL_MINUTES", 5),
     /** Used only to phrase long durations as "days of work" for the client. */

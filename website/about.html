@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Why Relay keeps client communication human while making engineering handoffs reliable." />
+    <meta name="theme-color" content="#1b241b" />
+    <title>About Relay — Built for the handoff</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav-shell" aria-label="Main navigation">
+        <a class="brand" href="index.html" aria-label="Relay home">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1b241b"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>
+          Relay
+        </a>
+        <button class="menu-button" type="button" aria-label="Toggle navigation" aria-expanded="false" data-menu-button><span></span></button>
+        <div class="nav-menu" data-menu data-open="false">
+          <a href="index.html">Home</a>
+          <a href="about.html" aria-current="page">About</a>
+          <a href="features.html">Features</a>
+          <a href="setup.html">How to set up</a>
+          <a class="nav-github" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">GitHub ↗</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <header class="page-hero" data-reveal>
+        <p class="eyebrow">About Relay</p>
+        <h1>The handoff should not become a second job.</h1>
+        <p class="lede">Relay exists for teams that serve clients in Slack and build somewhere else. It keeps the two conversations connected without exposing every internal thought or asking somebody to copy updates all day.</p>
+      </header>
+
+      <section class="statement">
+        <div class="statement-inner">
+          <span class="statement-label">The premise</span>
+          <blockquote data-reveal>Automation should carry context—not remove judgment.</blockquote>
+        </div>
+      </section>
+
+      <section class="section prose-grid">
+        <article data-reveal>
+          <h2>Why it exists</h2>
+          <p>A small client request rarely stays small. It needs triage, an owner, a question, a pause, a fix, and a useful close-out. When those steps happen across channels, the work becomes invisible on one side and noisy on the other.</p>
+          <p>Relay turns that gap into a controlled route. Every top-level client message becomes a task candidate. Every meaningful status change can return to the original thread. The mapping remains intact for the life of the work.</p>
+        </article>
+        <article data-reveal>
+          <h2>What it refuses to do</h2>
+          <p>Relay does not forward every engineering message to the client. Normal discussion stays internal. A teammate has to use <code>!ask</code> or <code>!reply</code> to cross the boundary.</p>
+          <p>It also does not turn the spreadsheet into a second database. Google Sheets is a readable mirror; Slack and the Relay ledger remain the place where work changes.</p>
+        </article>
+      </section>
+
+      <section class="section">
+        <div class="section-head" data-reveal>
+          <p class="eyebrow">Product principles</p>
+          <h2>Small rules that prevent big confusion.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card" data-reveal>
+            <span class="feature-icon">01</span>
+            <h3>Say less, on purpose</h3>
+            <p>The client hears about ownership, meaningful progress, blockers, questions, and completion—not every timer event or internal note.</p>
+          </article>
+          <article class="feature-card" data-reveal>
+            <span class="feature-icon">02</span>
+            <h3>Keep state inspectable</h3>
+            <p>The top card is re-rendered after every change. The SQLite ledger keeps task state, work sessions, and an append-only event history.</p>
+          </article>
+          <article class="feature-card" data-reveal>
+            <span class="feature-icon">03</span>
+            <h3>Make ownership obvious</h3>
+            <p>A reaction claims the work. Assignment changes are explicit. Starting another task pauses the first so two clocks cannot run at once.</p>
+          </article>
+          <article class="feature-card" data-reveal>
+            <span class="feature-icon">04</span>
+            <h3>Respect both audiences</h3>
+            <p>The team keeps exact effort and rich internal context. The client gets resolved names, plain language, and rounded time when work is done.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div class="split-copy" data-reveal>
+          <p class="eyebrow">What it is made of</p>
+          <h2>Boring infrastructure, carefully joined.</h2>
+          <p>Relay is a TypeScript service using Slack Bolt in Socket Mode, SQLite for durable task state, a small authenticated HTTP API, and an optional Google Sheets mirror.</p>
+        </div>
+        <ol class="principle-list" data-reveal>
+          <li><b>TS</b><div><strong>Typed application core</strong><span>Status transitions and notification rules share one path.</span></div></li>
+          <li><b>DB</b><div><strong>Persistent SQLite ledger</strong><span>A single file stores the message mapping every live thread needs.</span></div></li>
+          <li><b>CLI</b><div><strong>Editor-friendly workflow</strong><span>Engineers and coding agents can claim, start, ask, and finish without opening Slack.</span></div></li>
+        </ol>
+      </section>
+
+      <section class="cta-wrap">
+        <div class="cta-panel" data-reveal>
+          <p class="eyebrow">Read the implementation</p>
+          <h2>No mystery layer. The source is the product.</h2>
+          <p>Start with the workflow in the README, then inspect the shared transition path that keeps task state and client updates together.</p>
+          <div class="cta-actions">
+            <a class="button button-primary" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">Open GitHub <span aria-hidden="true">↗</span></a>
+            <a class="button button-secondary" href="features.html">See all features</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-top">
+          <div class="footer-brand">
+            <a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#fffef3"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>Relay</a>
+            <p>Client requests in. Engineering signal out. Everything useful stays connected.</p>
+          </div>
+          <nav class="footer-nav" aria-label="Product"><strong>Product</strong><a href="features.html">Features</a><a href="about.html">About</a></nav>
+          <nav class="footer-nav" aria-label="Resources"><strong>Resources</strong><a href="setup.html">Setup</a><a href="https://github.com/Kurama07a/relay/blob/main/README.md">Documentation</a></nav>
+          <nav class="footer-nav" aria-label="Source"><strong>Source</strong><a href="https://github.com/Kurama07a/relay">GitHub</a><a href="https://github.com/Kurama07a/relay/issues">Issues</a></nav>
+        </div>
+        <div class="footer-bottom"><span>Relay · Self-hosted Slack operations</span><span>Built for clear handoffs</span></div>
+      </div>
+    </footer>
+  </body>
+</html>

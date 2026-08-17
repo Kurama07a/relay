@@ -9,10 +9,11 @@ import { countRoutes, listRoutes, watchedChannels } from "./routes.js";
 import * as settings from "./settings.js";
 import { ADMIN_USERS } from "./permissions.js";
 import { channelName } from "./slack/names.js";
-import { refreshInternalMessage } from "./slack/actions.js";
+import { ICON } from "./slack/design.js";
+import { postToInternal, refreshInternalMessage } from "./slack/actions.js";
 import { countByStatus, getTask } from "./store.js";
 import { startApi } from "./api.js";
-import { reapStaleSessions } from "./sessions.js";
+import { formatExact, reapStaleSessions, sessionSeconds } from "./sessions.js";
 import { startSheetSync } from "./sheets.js";
 
 /**
@@ -52,10 +53,27 @@ function startSessionReaper(): NodeJS.Timeout {
       const reaped = reapStaleSessions();
       for (const session of reaped) {
         log.warn(
-          `reaped stale session ${session.id} on task ${session.task_id} (last heartbeat ${session.last_heartbeat_at})`,
+          `reaped stale session ${session.id} on task ${session.task_id} (source ${session.source}, last heartbeat ${session.last_heartbeat_at})`,
         );
         const task = getTask(session.task_id);
-        if (task) await refreshInternalMessage(task);
+        if (!task) continue;
+
+        await refreshInternalMessage(task);
+
+        // Say so in the thread. A clock that stops on its own and tells nobody
+        // is how someone comes back hours later, types `!stop`, and is told
+        // they had no session running.
+        const why =
+          session.source === "slack"
+            ? `it hit the ${config.sessions.maxHours}h limit for sessions started here`
+            : `your editor stopped checking in for ${config.sessions.staleAfterMinutes} minutes`;
+
+        await postToInternal(
+          task,
+          `${ICON.pause} <@${session.engineer}> — your clock was stopped automatically after ` +
+            `*${formatExact(sessionSeconds(session))}* because ${why}. ` +
+            `The task is still ${task.status.replace("_", " ")}; \`${config.commandPrefix}start\` to resume.`,
+        );
       }
     } catch (error) {
       log.error("session reaper failed", error);

@@ -209,6 +209,40 @@ check(
   1,
 );
 
+// A session started from Slack has nothing beating for it, so a heartbeat
+// timeout must not touch it — that is what made `!start` then `!stop` report
+// "no session running" after twenty quiet minutes.
+const slackSession = sessions.startSession(second.id, "U_SLACK", "slack");
+db2.prepare(`UPDATE work_sessions SET started_at = ?, last_heartbeat_at = ? WHERE id = ?`)
+  .run(
+    new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+    new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+    slackSession.session.id,
+  );
+check("a quiet slack session survives the heartbeat timeout", sessions.reapStaleSessions().length, 0);
+check(
+  "and is still running",
+  sessions.getSession(slackSession.session.id)?.ended_at,
+  null,
+);
+
+// It is capped by length instead, and must record the capped time rather than
+// backdating to its start — which for a session with no heartbeats is the same
+// instant, and would log zero.
+db2.prepare(`UPDATE work_sessions SET started_at = ?, last_heartbeat_at = ? WHERE id = ?`)
+  .run(
+    new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
+    new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
+    slackSession.session.id,
+  );
+const capped = sessions.reapStaleSessions();
+check("a slack session past the cap is reaped", capped.length, 1);
+check(
+  "capped at the maximum, not left at 30 hours",
+  Math.round(sessions.sessionSeconds(sessions.getSession(slackSession.session.id)!) / 3600),
+  8,
+);
+
 sessions.adjustSession(stale.session.id, -30, "left it running");
 check(
   "adjustment reduces the total",

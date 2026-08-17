@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Install Relay, create the Slack app, pair channels, verify the workflow, and deploy the bot to Coolify." />
+    <meta name="theme-color" content="#1b241b" />
+    <title>Set up Relay — Slack to Coolify</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav-shell" aria-label="Main navigation">
+        <a class="brand" href="index.html" aria-label="Relay home">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1b241b"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>
+          Relay
+        </a>
+        <button class="menu-button" type="button" aria-label="Toggle navigation" aria-expanded="false" data-menu-button><span></span></button>
+        <div class="nav-menu" data-menu data-open="false">
+          <a href="index.html">Home</a>
+          <a href="about.html">About</a>
+          <a href="features.html">Features</a>
+          <a href="setup.html" aria-current="page">How to set up</a>
+          <a class="nav-github" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">GitHub ↗</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <header class="page-hero" data-reveal>
+        <p class="eyebrow">How to set up</p>
+        <h1>From clone to first handoff.</h1>
+        <p class="lede">Start in a throwaway Slack workspace or with two test channels. Relay reacts and posts immediately, so prove the loop before inviting it into a client conversation.</p>
+      </header>
+
+      <section class="section setup-layout">
+        <aside class="setup-nav" aria-label="Setup steps">
+          <strong>On this page</strong>
+          <a href="#requirements">Before you start</a>
+          <a href="#slack-app">Create the Slack app</a>
+          <a href="#configure">Configure Relay</a>
+          <a href="#pair">Pair two channels</a>
+          <a href="#verify">Verify the loop</a>
+          <a href="#coolify">Host the bot on Coolify</a>
+        </aside>
+
+        <div class="setup-content">
+          <article class="setup-step" id="requirements" data-reveal>
+            <header><span>00</span><h2>Before you start</h2></header>
+            <p>You need Node.js 20 or newer and permission to install an app in your Slack workspace. Create two safe test channels such as <code>#test-client</code> and <code>#test-eng</code>.</p>
+            <div class="callout"><strong>Keep the first test private.</strong> Relay adds a seen reaction to incoming requests and writes status updates back into the client thread. Do not discover that behavior in front of a customer.</div>
+          </article>
+
+          <article class="setup-step" id="slack-app" data-reveal>
+            <header><span>01</span><h2>Create the Slack app</h2></header>
+            <p>The repository's <code>manifest.json</code> declares the scopes, events, interactivity, and <code>/relay</code> command. The Slack CLI is the shortest repeatable route:</p>
+            <div class="code-window">
+              <div class="code-topbar"><span>Terminal</span><button class="copy-button" type="button" data-copy="#slack-install">Copy</button></div>
+              <pre id="slack-install" tabindex="-1">git clone https://github.com/Kurama07a/relay.git
+cd relay
+npm install
+
+slack login
+slack install</pre>
+            </div>
+            <p>You can also create an app “from a manifest” at <a href="https://api.slack.com/apps">api.slack.com/apps</a> and paste <code>manifest.json</code>.</p>
+            <div class="callout">If you use the web dashboard, copy the bot token from <strong>OAuth &amp; Permissions</strong>, then create an app-level token with the <code>connections:write</code> scope. Relay needs both the <code>xoxb-…</code> bot token and <code>xapp-…</code> app token.</div>
+          </article>
+
+          <article class="setup-step" id="configure" data-reveal>
+            <header><span>02</span><h2>Configure and start Relay</h2></header>
+            <p>Copy the example environment file and add the two Slack tokens. Keep the editor API disabled for the first Slack-only test.</p>
+            <div class="code-window">
+              <div class="code-topbar"><span>.env + terminal</span><button class="copy-button" type="button" data-copy="#local-config">Copy</button></div>
+              <pre id="local-config" tabindex="-1">cp .env.example .env
+
+<span class="comment"># edit .env</span>
+SLACK_BOT_TOKEN=xoxb-your-token
+SLACK_APP_TOKEN=xapp-your-token
+API_ENABLED=false
+
+<span class="comment"># start the socket connection</span>
+npm run dev</pre>
+            </div>
+            <p>Invite Relay to every channel you plan to pair. In Slack, open each channel and use <code>/invite @Relay</code>.</p>
+          </article>
+
+          <article class="setup-step" id="pair" data-reveal>
+            <header><span>03</span><h2>Pair the client and team channels</h2></header>
+            <p>Run <code>/relay setup</code> in Slack. Choose <strong>Add pairing</strong>, select the test client channel and engineering channel, then save.</p>
+            <p>Relay validates membership and rejects routes that would loop or double-post. Each client channel can route to its own team channel, or several clients can share one engineering channel.</p>
+            <table class="command-table">
+              <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>/relay setup</code></td><td>Open the setup card with channel, sheet, and permission controls.</td></tr>
+                <tr><td><code>/relay pair #client #team</code></td><td>Create a pairing without the form.</td></tr>
+                <tr><td><code>/relay control #channel</code></td><td>Announce configuration changes in one shared place.</td></tr>
+                <tr><td><code>/relay admins</code></td><td>Show who can configure Relay and where.</td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="setup-step" id="verify" data-reveal>
+            <header><span>04</span><h2>Verify the complete loop</h2></header>
+            <p>Post “the export button is broken” in <code>#test-client</code>. Confirm that Relay adds an eyes reaction and creates a card in <code>#test-eng</code>.</p>
+            <ol>
+              <li>React with ✋ on the team card and confirm the client hears who picked it up.</li>
+              <li>Run <code>!start</code>, then <code>!ask which browser?</code> in the card thread.</li>
+              <li>Reply in the client thread and confirm the answer returns to the team thread.</li>
+              <li>Run <code>!done fixed the export</code> and confirm both sides close cleanly.</li>
+            </ol>
+            <div class="code-window">
+              <div class="code-topbar"><span>Checks</span><button class="copy-button" type="button" data-copy="#relay-checks">Copy</button></div>
+              <pre id="relay-checks" tabindex="-1"><span class="comment"># validate granted Slack scopes and live config</span>
+npm run doctor
+
+<span class="comment"># run the local smoke suites</span>
+npm test</pre>
+            </div>
+          </article>
+
+          <article class="setup-step" id="coolify" data-reveal>
+            <header><span>05</span><h2>Host the Relay bot on Coolify</h2></header>
+            <p>Coolify runs the long-lived bot process. The static product website in <code>website/</code> is separate and is not part of this deployment.</p>
+            <p>Relay uses an outbound Slack Socket Mode connection, so the bot needs no public domain. It does need exactly one instance and a persistent volume mounted at <code>/data</code>.</p>
+            <div class="code-window">
+              <div class="code-topbar"><span>Coolify API helper</span><button class="copy-button" type="button" data-copy="#coolify-commands">Copy</button></div>
+              <pre id="coolify-commands" tabindex="-1"><span class="comment"># add Coolify credentials and target ids to .env</span>
+COOLIFY_URL=https://coolify.example.com
+COOLIFY_TOKEN=your-write-token
+COOLIFY_SERVER_UUID=...
+COOLIFY_PROJECT_UUID=...
+COOLIFY_ENVIRONMENT=production
+
+<span class="comment"># inspect, create, configure, deploy</span>
+npm run coolify probe
+npm run coolify create
+<span class="comment"># add the printed COOLIFY_APP_UUID to .env</span>
+npm run coolify env
+npm run coolify deploy
+npm run coolify status</pre>
+            </div>
+            <div class="callout"><strong>Do not deploy before adding storage.</strong> In the Coolify resource, add persistent storage at <code>/data</code>. The database is the live mapping between every client message and engineering card; losing it breaks existing threads.</div>
+            <p>Set <code>SLACK_BOT_TOKEN</code> and <code>SLACK_APP_TOKEN</code> in the local <code>.env</code> before running <code>npm run coolify env</code>. The helper sends values without printing them. Keep replicas at one and leave the API port unexposed unless you have deliberately configured remote CLI authentication.</p>
+            <div class="hero-actions">
+              <a class="button button-secondary" href="https://github.com/Kurama07a/relay/blob/main/DEPLOY.md" target="_blank" rel="noreferrer">Read full deployment notes <span aria-hidden="true">↗</span></a>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="cta-wrap">
+        <div class="cta-panel" data-reveal>
+          <p class="eyebrow">Need the exact edge cases?</p>
+          <h2>The repository docs go all the way down.</h2>
+          <p>Scopes, troubleshooting, editor integration, API tokens, Google Sheets, backups, and outage behavior are documented beside the code.</p>
+          <div class="cta-actions">
+            <a class="button button-primary" href="https://github.com/Kurama07a/relay/blob/main/SETUP.md" target="_blank" rel="noreferrer">Open SETUP.md <span aria-hidden="true">↗</span></a>
+            <a class="button button-secondary" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">View GitHub</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-top">
+          <div class="footer-brand">
+            <a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#fffef3"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>Relay</a>
+            <p>Client requests in. Engineering signal out. Everything useful stays connected.</p>
+          </div>
+          <nav class="footer-nav" aria-label="Product"><strong>Product</strong><a href="features.html">Features</a><a href="about.html">About</a></nav>
+          <nav class="footer-nav" aria-label="Resources"><strong>Resources</strong><a href="setup.html">Setup</a><a href="https://github.com/Kurama07a/relay/blob/main/README.md">Documentation</a></nav>
+          <nav class="footer-nav" aria-label="Source"><strong>Source</strong><a href="https://github.com/Kurama07a/relay">GitHub</a><a href="https://github.com/Kurama07a/relay/issues">Issues</a></nav>
+        </div>
+        <div class="footer-bottom"><span>Relay · Self-hosted Slack operations</span><span>Built for clear handoffs</span></div>
+      </div>
+    </footer>
+  </body>
+</html>

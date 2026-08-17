@@ -360,6 +360,29 @@ npm run preview         # render every card and notice, no Slack needed
 npm test                # 211 checks, no Slack and no tokens needed
 ```
 
+## Product website
+
+The dependency-free product site lives in [`website/`](website/): landing,
+about, features, and setup pages built with plain HTML, CSS, and JavaScript.
+
+Live on Vercel: <https://relay.prakhar.wtf>
+
+```bash
+npx serve website       # local preview
+npm run site:check      # validate pages, assets, and internal links
+```
+
+The website is deployment-neutral. The Coolify helper deploys the long-lived
+Relay bot from the root `Dockerfile`, not the static site:
+
+```bash
+npm run coolify probe
+npm run coolify create
+npm run coolify env
+npm run coolify deploy
+npm run coolify status
+```
+
 ## Layout
 
 ```

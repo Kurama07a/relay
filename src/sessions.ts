@@ -102,16 +102,23 @@ export function heartbeat(sessionId: number): void {
  * moment we noticed — a laptop that slept at 6pm should not bill until the
  * reaper ran the next morning.
  */
-export function endSession(sessionId: number, reason: EndReason = "explicit"): WorkSession | undefined {
+export function endSession(
+  sessionId: number,
+  reason: EndReason = "explicit",
+  at?: string,
+): WorkSession | undefined {
   const session = getSession(sessionId);
   if (!session || session.ended_at) return session;
 
-  const endedAt = reason === "reaped" ? session.last_heartbeat_at : now();
+  const endedAt = at ?? (reason === "reaped" ? session.last_heartbeat_at : now());
   db.prepare(`UPDATE work_sessions SET ended_at = ?, end_reason = ? WHERE id = ?`)
     .run(endedAt, reason, sessionId);
 
   return getSession(sessionId);
 }
+
+/** Sources that emit heartbeats, so silence from them means "gone away". */
+const HEARTBEAT_SOURCES: SessionSource[] = ["claude-code", "codex", "cli"];
 
 /** Adds a correction, in minutes, to a session's measured span. */
 export function adjustSession(sessionId: number, deltaMinutes: number, note?: string): void {
@@ -160,14 +167,41 @@ export function effortFor(taskId: number): Effort {
  * overnight session that lands in a client-facing number.
  */
 export function reapStaleSessions(): WorkSession[] {
-  const cutoff = new Date(Date.now() - config.sessions.staleAfterMinutes * 60_000).toISOString();
-  const stale = db
-    .prepare(`SELECT * FROM work_sessions WHERE ended_at IS NULL AND last_heartbeat_at < ?`)
-    .all(cutoff) as WorkSession[];
+  const open = db
+    .prepare(`SELECT * FROM work_sessions WHERE ended_at IS NULL`)
+    .all() as WorkSession[];
 
-  return stale
-    .map((session) => endSession(session.id, "reaped"))
-    .filter((session): session is WorkSession => Boolean(session));
+  const heartbeatCutoff = Date.now() - config.sessions.staleAfterMinutes * 60_000;
+  const maxLength = config.sessions.maxHours * 3_600_000;
+  const reaped: WorkSession[] = [];
+
+  for (const session of open) {
+    if (HEARTBEAT_SOURCES.includes(session.source)) {
+      // An editor stopped checking in: it closed, crashed, or the laptop slept.
+      // End at the last beat, since that's the last moment work was observed.
+      if (new Date(session.last_heartbeat_at).getTime() < heartbeatCutoff) {
+        const closed = endSession(session.id, "reaped");
+        if (closed) reaped.push(closed);
+      }
+      continue;
+    }
+
+    // Sessions started from Slack have nothing beating for them, so silence
+    // means nothing. They're capped by length instead, and end at the cap
+    // rather than at their start — backdating to the last heartbeat would
+    // record zero time, since for these that *is* the start.
+    const startedAt = new Date(session.started_at).getTime();
+    if (Date.now() - startedAt > maxLength) {
+      const closed = endSession(
+        session.id,
+        "reaped",
+        new Date(startedAt + maxLength).toISOString(),
+      );
+      if (closed) reaped.push(closed);
+    }
+  }
+
+  return reaped;
 }
 
 /** Precise duration, for the team's own eyes: `4h 22m`. */

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Explore Relay's Slack triage, task threads, client updates, time tracking, CLI, permissions, and reporting." />
+    <meta name="theme-color" content="#1b241b" />
+    <title>Relay features — A complete client-to-engineering loop</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav-shell" aria-label="Main navigation">
+        <a class="brand" href="index.html" aria-label="Relay home">
+          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#1b241b"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>
+          Relay
+        </a>
+        <button class="menu-button" type="button" aria-label="Toggle navigation" aria-expanded="false" data-menu-button><span></span></button>
+        <div class="nav-menu" data-menu data-open="false">
+          <a href="index.html">Home</a>
+          <a href="about.html">About</a>
+          <a href="features.html" aria-current="page">Features</a>
+          <a href="setup.html">How to set up</a>
+          <a class="nav-github" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">GitHub ↗</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main">
+      <header class="page-hero" data-reveal>
+        <p class="eyebrow">Features</p>
+        <h1>One loop, from request to resolved.</h1>
+        <p class="lede">Relay is not a ticket system squeezed into Slack. It is the connective tissue between a client conversation and the engineering work it creates.</p>
+      </header>
+
+      <section class="statement">
+        <div class="statement-inner">
+          <span class="statement-label">The useful difference</span>
+          <blockquote data-reveal>The task card is always current. The conversation stays human.</blockquote>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="feature-catalog">
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Intake</span>
+            <h2>Channel-aware triage</h2>
+            <p>Pair every client channel with the right team channel. Relay can watch all messages or only requests that mention it. New requests arrive as cards with claim and dismiss reactions already attached.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Ownership</span>
+            <h2>Claim with one reaction</h2>
+            <p>A raised hand assigns the request to the teammate who reacted and tells the client who has it. Removing the reaction before work starts releases it; later handoffs use an explicit assignment command.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Threads</span>
+            <h2>Commands in context</h2>
+            <p><code>!start</code>, <code>!pause</code>, <code>!done</code>, <code>!block</code>, <code>!ask</code>, <code>!reply</code>, <code>!note</code>, and <code>!assign</code> run inside the task thread, beside the discussion they affect.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Boundary</span>
+            <h2>Deliberate client updates</h2>
+            <p>Normal engineering messages never leak across. Client communication is always explicit, and Relay resolves real display names before posting so Slack Connect users never see raw member IDs.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Effort</span>
+            <h2>Hands-off work sessions</h2>
+            <p>Relay tracks multiple sessions over a task's life, enforces one live clock per engineer, reaps abandoned sessions at the last heartbeat, and supports corrections with a reason.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Editor</span>
+            <h2>CLI and coding-agent skill</h2>
+            <p>The same operations are available over a small authenticated API and zero-dependency CLI. Engineers—and their coding agents—can inspect the full conversation and update Slack from the editor.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Ledger</span>
+            <h2>Durable, inspectable history</h2>
+            <p>Tasks, sessions, and an append-only event log live in SQLite. Redelivered Slack events are idempotent, and task cards are re-rendered after every transition so the top message remains the real state.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Reporting</span>
+            <h2>Readable outside Slack</h2>
+            <p>Export Summary, Tasks, Sessions, and Activity tabs to CSV or an optional styled Google Sheet. The sheet is intentionally one-way: it mirrors the ledger without becoming a second source of truth.</p>
+          </article>
+          <article class="catalog-row" data-reveal>
+            <span class="chip">Control</span>
+            <h2>Setup without server edits</h2>
+            <p>Admins manage pairings, sheet sync, and permissions through <code>/relay setup</code>. Workspace owners cannot be locked out, and configuration changes can be announced in a control channel.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section split-section">
+        <div class="code-window" data-reveal>
+          <div class="code-topbar"><span>Thread commands</span></div>
+          <pre><span class="comment"># move work</span>
+!start
+!pause
+!done fixed the timeout
+
+<span class="comment"># cross the client boundary</span>
+!ask which browser?
+!reply deployed to staging
+
+<span class="comment"># keep internal context</span>
+!note Safari repro is flaky
+!sessions</pre>
+        </div>
+        <div class="split-copy" data-reveal>
+          <p class="eyebrow">A small vocabulary</p>
+          <h2>Nothing to learn that the team cannot remember.</h2>
+          <p>Commands use plain verbs, successful actions acknowledge with a reaction, and the card itself carries the current state. Relay keeps the mechanism out of the way.</p>
+        </div>
+      </section>
+
+      <section class="cta-wrap">
+        <div class="cta-panel" data-reveal>
+          <p class="eyebrow">Try the real flow</p>
+          <h2>Test it with two throwaway Slack channels.</h2>
+          <p>Play both client and engineer yourself. You can see the entire loop before Relay ever touches a real client conversation.</p>
+          <div class="cta-actions">
+            <a class="button button-primary" href="setup.html">Set up Relay <span aria-hidden="true">→</span></a>
+            <a class="button button-secondary" href="https://github.com/Kurama07a/relay" target="_blank" rel="noreferrer">Browse source</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-top">
+          <div class="footer-brand">
+            <a class="brand" href="index.html"><svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#fffef3"/><path d="M15 19h18c9 0 16 6 16 15s-7 15-16 15H19" fill="none" stroke="#ff5a2f" stroke-width="8" stroke-linecap="round"/><circle cx="17" cy="19" r="6" fill="#ffd34e"/><circle cx="17" cy="49" r="6" fill="#d9ef75"/></svg>Relay</a>
+            <p>Client requests in. Engineering signal out. Everything useful stays connected.</p>
+          </div>
+          <nav class="footer-nav" aria-label="Product"><strong>Product</strong><a href="features.html">Features</a><a href="about.html">About</a></nav>
+          <nav class="footer-nav" aria-label="Resources"><strong>Resources</strong><a href="setup.html">Setup</a><a href="https://github.com/Kurama07a/relay/blob/main/README.md">Documentation</a></nav>
+          <nav class="footer-nav" aria-label="Source"><strong>Source</strong><a href="https://github.com/Kurama07a/relay">GitHub</a><a href="https://github.com/Kurama07a/relay/issues">Issues</a></nav>
+        </div>
+        <div class="footer-bottom"><span>Relay · Self-hosted Slack operations</span><span>Built for clear handoffs</span></div>
+      </div>
+    </footer>
+  </body>
+</html>
