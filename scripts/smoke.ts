@@ -251,9 +251,9 @@ check(
 );
 
 const effort = sessions.effortFor(second.id);
-check("effort sums the task's sessions", effort.sessionCount, 2);
+check("effort sums the task's sessions", effort.sessionCount, 3);
 check("effort knows nothing is running", effort.active, false);
-check("effort lists both engineers", effort.engineers.sort(), ["U_ENG", "U_OTHER"]);
+check("effort lists every engineer who worked on it", effort.engineers.sort(), ["U_ENG", "U_OTHER", "U_SLACK"]);
 
 console.log("\nduration formatting");
 check("exact, sub-hour", sessions.formatExact(45 * 60), "45m");
