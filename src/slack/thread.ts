@@ -154,6 +154,13 @@ async function dispatch(
       return;
     }
 
+    case "time-help":
+    case "timehelp":
+    case "timing": {
+      await postEphemeral(message.channel, actor, timeHelpText(), thread);
+      return;
+    }
+
     case "sessions": {
       await postToInternal(task, sessionBreakdown(task));
       return;
@@ -321,6 +328,40 @@ function sessionBreakdown(task: Task): string {
   ].join("\n");
 }
 
+/**
+ * The timing guide. Someone types `!time-help` after being surprised by a
+ * total, so it leads with how the number is built and how to correct it, not
+ * with a command list.
+ */
+function timeHelpText(): string {
+  const p = config.commandPrefix;
+  const { staleAfterMinutes, maxHours } = config.sessions;
+  return [
+    "*How Relay records time*",
+    "",
+    "*The clock*",
+    `• \`${p}start\` opens a work session and starts counting. \`${p}pause\` closes it and leaves the task open, so you can \`${p}start\` again later. \`${p}done\` closes any open session and reports the total.`,
+    `• Only wall-clock time *between* \`${p}start\` and \`${p}pause\`/\`${p}done\` is counted. Work done before you \`${p}start\` is not recorded — correct it afterwards (below).`,
+    `• One session runs at a time. \`${p}start\` on another task pauses the first automatically.`,
+    "",
+    "*Why a session can close on its own*",
+    `• Sessions started from the \`relay\` CLI or an editor send a heartbeat while you work. If the heartbeat stops for *${staleAfterMinutes} min* — laptop closed, editor quit — the session auto-closes at the last heartbeat, not at the moment it was noticed.`,
+    `• Sessions started here with \`${p}start\` have nothing beating for them, so silence is not treated as "gone". They run until you \`${p}pause\`/\`${p}done\` or hit the *${maxHours}h* cap, when the clock is stopped and a note is posted in this thread. A forgotten \`${p}start\` bills up to ${maxHours}h — \`${p}pause\` when you stop.`,
+    "",
+    "*Check what's recorded*",
+    `• \`${p}sessions\` — every session on this task: exact minutes, who, and whether any auto-closed.`,
+    `• \`${p}status\` — the task's full history.`,
+    "",
+    "*Correct a wrong total*",
+    `• \`${p}time +45 <why>\` adds 45 minutes to the session you are currently in; \`${p}time -20 <why>\` removes 20. Minutes only; the reason is kept with the adjustment.`,
+    `• You need a *running* session on this task to adjust it. If you already closed it: \`${p}start\`, then \`${p}time +N <why>\`, then \`${p}pause\`/\`${p}done\`.`,
+    `• Use it when you worked before running \`${p}start\`, left a session running over a break, or an editor session auto-closed early.`,
+    "",
+    "*What the client sees*",
+    `• Never the exact figure. On \`${p}done\` they are told a rounded range — "about 2 hours", "under 15 minutes". The precise total stays in this channel and the ledger.`,
+  ].join("\n");
+}
+
 function helpText(): string {
   const p = config.commandPrefix;
   return [
@@ -336,6 +377,7 @@ function helpText(): string {
     `\`${p}assign @teammate\` — hand it over`,
     `\`${p}kind ${KINDS.join("|")}\` — fix the category`,
     `\`${p}time -30 <why>\` — correct the running session, in minutes`,
+    `\`${p}time-help\` — how the clock works and how to fix a wrong total`,
     `\`${p}sessions\` — who worked on this, and for how long`,
     `\`${p}status\` — full history for this task`,
     "",

@@ -101,6 +101,7 @@ Run these in the card's thread.
 | `!assign @teammate` | Hands it over | 🔄 *Priya has taken this over* |
 | `!kind bug\|feature\|review\|question\|request` | Fixes the category | — nothing |
 | `!time -30 <why>` | Corrects the running session, in minutes | — nothing |
+| `!time-help` | Explains how the clock works and how to fix a wrong total (only you see it) | — nothing |
 | `!sessions` | Who worked on it and for how long | — nothing |
 | `!status` | Full history in-thread | — nothing |
 | `!help` | Command list (only you see it) | — nothing |
