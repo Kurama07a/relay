@@ -17,6 +17,7 @@ import {
   canAdmin,
   describeAdmins,
   forgetRoles,
+  forgetTeamMembers,
   setAdminChannels,
   setAdminUsers,
 } from "../permissions.js";
@@ -47,7 +48,7 @@ const SET_PERMS = "relay_set_perms";
  * an interaction payload is a request like any other, and "the UI didn't offer
  * it" is not an authorisation model.
  */
-async function denyIfNotAdmin(
+export async function denyIfNotAdmin(
   userId: string,
   channelId: string | undefined,
   respond?: (message: { response_type: "ephemeral"; replace_original: boolean; text: string }) => Promise<unknown>,
@@ -363,7 +364,7 @@ async function membershipProblem(channel: string): Promise<string | null> {
 }
 
 /** Pulls user, channel, and trigger out of a block_actions payload. */
-function actionContext(body: unknown): {
+export function actionContext(body: unknown): {
   user: string;
   channel: string | undefined;
   triggerId: string | undefined;
@@ -510,6 +511,7 @@ export function registerAdmin(): void {
       return;
     }
     await ack();
+    forgetTeamMembers();
 
     await announce(
       `${ICON.done} <@${body.user.id}> paired *${await channelName(clientChannel)}* → *${await channelName(teamChannel)}*` +

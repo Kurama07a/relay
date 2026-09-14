@@ -15,6 +15,8 @@ import { countByStatus, getTask } from "./store.js";
 import { startApi } from "./api.js";
 import { HEARTBEAT_SOURCES, formatExact, reapStaleSessions, sessionSeconds } from "./sessions.js";
 import { startSheetSync } from "./sheets.js";
+import { describeJiraError, jiraConfigured, myself } from "./jira/client.js";
+import { registerJiraAdmin } from "./slack/jira-admin.js";
 
 /**
  * Warns about channels the bot cannot actually read. Missing membership is the
@@ -39,6 +41,23 @@ async function checkMembership(): Promise<void> {
       const reason = (error as { data?: { error?: string } })?.data?.error ?? error;
       log.warn(`cannot read channel ${channel}: ${reason}`);
     }
+  }
+}
+
+/**
+ * Proves the Jira token works while someone is watching the deploy logs,
+ * rather than leaving it to surface at the first poll.
+ */
+async function checkJira(): Promise<void> {
+  if (!jiraConfigured()) {
+    log.info("jira off (JIRA_URL not set)");
+    return;
+  }
+  try {
+    const me = await myself();
+    log.info(`jira: connected to ${config.jira.url} as ${me.displayName} (read-only)`);
+  } catch (error) {
+    log.warn(`jira: ${describeJiraError(error)}`);
   }
 }
 
@@ -149,6 +168,7 @@ async function main(): Promise<void> {
   registerReactions();
   registerCommands();
   registerAdmin();
+  registerJiraAdmin();
 
   app.error(async (error) => {
     log.error("unhandled bolt error", error);
@@ -171,6 +191,7 @@ async function main(): Promise<void> {
   startSheetSync();
 
   await checkMembership();
+  await checkJira();
 }
 
 /**

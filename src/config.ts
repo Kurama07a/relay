@@ -148,6 +148,19 @@ export const config = {
    */
   publicUrl: optional("PUBLIC_URL", ""),
 
+  /**
+   * Jira Cloud, read-only. All three connection settings are needed together;
+   * with none of them set, the integration stays off and nothing else changes.
+   */
+  jira: {
+    /** The site address, e.g. https://yourco.atlassian.net. */
+    url: optional("JIRA_URL", "").replace(/\/+$/, ""),
+    email: optional("JIRA_EMAIL", ""),
+    apiToken: optional("JIRA_API_TOKEN", ""),
+    /** How often to check the active sprint for changed stories. */
+    pollMinutes: number("JIRA_POLL_MINUTES", 3),
+  },
+
   dbPath: optional("DB_PATH", "./relay.db"),
   logLevel: optional("LOG_LEVEL", "info"),
 
@@ -161,6 +174,22 @@ export const config = {
 
 export function isLoopback(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
+}
+
+/**
+ * Jira is all or nothing. Half-configured, Relay would start and then fail on
+ * every poll, which is far easier to miss than refusing to boot.
+ */
+export function jiraSettingsProblem(jira: { url: string; email: string; apiToken: string }): string | null {
+  const set = [jira.url, jira.email, jira.apiToken].filter(Boolean).length;
+  if (set === 0) return null;
+  if (set < 3) {
+    return "JIRA_URL, JIRA_EMAIL and JIRA_API_TOKEN must be set together, or all left empty to keep Jira off.";
+  }
+  if (!/^https:\/\/[^/\s]+$/.test(jira.url)) {
+    return `JIRA_URL must be the site address, like https://yourco.atlassian.net — got "${jira.url}".`;
+  }
+  return null;
 }
 
 export function validateConfig(): void {
@@ -180,4 +209,7 @@ export function validateConfig(): void {
   }
   if (!config.emoji.claim.primary) throw new Error("CLAIM_EMOJI is empty.");
   if (!config.emoji.dismiss.primary) throw new Error("DISMISS_EMOJI is empty.");
+
+  const jiraProblem = jiraSettingsProblem(config.jira);
+  if (jiraProblem) throw new Error(jiraProblem);
 }

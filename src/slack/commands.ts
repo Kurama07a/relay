@@ -1,11 +1,14 @@
 import type { KnownBlock } from "@slack/types";
 import { app, teamId } from "./app.js";
 import { announce, configBlocks, postingProblem, sheetError } from "./admin.js";
+import { jiraBlocks, jiraCommand } from "./jira-admin.js";
 import {
   adminChannels,
   adminUsers,
   canAdmin,
+  canSeeTasks,
   forgetRoles,
+  forgetTeamMembers,
   setAdminChannels,
   setAdminUsers,
 } from "../permissions.js";
@@ -76,14 +79,21 @@ async function run(
   const rest = restParts.join(" ");
   const verb = subcommand.toLowerCase();
 
-  // Task commands are open to everyone; anything that changes configuration is
-  // gated. Checked here, once, rather than inside each branch — a new admin
-  // subcommand added to this list is protected by default.
+  // Anything that changes configuration is admin-only. Checked here, once,
+  // rather than inside each branch — a new admin subcommand added to this list
+  // is protected by default.
   const ADMIN_VERBS = new Set([
-    "pair", "unpair", "sheet", "backfill", "control", "admin", "admins",
+    "pair", "unpair", "sheet", "backfill", "control", "admin", "admins", "jira",
   ]);
   if (ADMIN_VERBS.has(verb)) {
     const decision = await canAdmin(userId, channelId);
+    if (!decision.ok) return `${ICON.warning} ${decision.reason}`;
+  }
+
+  // Everything else shows every client's work, and clients are guests here who
+  // can run slash commands from their own channels. Only the team gets answers.
+  if (!ADMIN_VERBS.has(verb) && verb !== "help") {
+    const decision = await canSeeTasks(userId);
     if (!decision.ok) return `${ICON.warning} ${decision.reason}`;
   }
 
@@ -113,13 +123,15 @@ async function run(
       return rows ? `*Ledger*\n${rows}` : "The ledger is empty.";
     }
 
-    // Viewing the setup is open — knowing which channel your requests land in
-    // is useful to everyone. The card itself hides the sheet link and the
-    // buttons from anyone who can't use them.
+    // Viewing the setup is open to the team — knowing which channel requests
+    // land in is useful to everyone on it. The card hides the sheet link, the
+    // Jira section and the buttons from anyone who can't use them.
     case "setup":
     case "config":
-    case "routes":
-      return { blocks: await configBlocks((await canAdmin(userId, channelId)).ok) };
+    case "routes": {
+      const isAdmin = (await canAdmin(userId, channelId)).ok;
+      return { blocks: [...(await configBlocks(isAdmin)), ...(isAdmin ? await jiraBlocks() : [])] };
+    }
 
     case "admins":
     case "admin": {
@@ -198,6 +210,7 @@ async function run(
         createdBy: userId,
       });
       if (!result.ok) return `${ICON.warning} ${result.error}`;
+      forgetTeamMembers();
       await announce(
         `${ICON.done} <@${userId}> paired *${await channelName(channels[0]!)}* → *${await channelName(channels[1]!)}*`,
         userId,
@@ -210,6 +223,7 @@ async function run(
       if (!channel) return "Usage: `/relay unpair #client-channel`";
       const removed = removeRoute(channel);
       if (!removed) return "That channel isn't paired with anything.";
+      forgetTeamMembers();
       await announce(`${ICON.note} <@${userId}> unpaired *${await channelName(channel)}*`, userId);
       return `Unpaired ${await channelName(channel)}. Existing tasks keep working.`;
     }
@@ -357,6 +371,9 @@ async function run(
       return `${ICON.done} Config changes will be announced in ${await channelName(channel)}.`;
     }
 
+    case "jira":
+      return jiraCommand(rest);
+
     case "help":
       return [
         "*Tasks*",
@@ -369,6 +386,7 @@ async function run(
         "`/relay sheet <url>` — connect a Google Sheet · `sync` · `off`",
         "`/relay backfill` — resolve any user or channel IDs into names",
         "`/relay control #channel` — where config changes get announced",
+        "`/relay jira` — Jira connection, sprint and member links · `unlink @someone`",
       ].join("\n");
 
     default: {

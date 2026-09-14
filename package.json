@@ -21,7 +21,8 @@
     "token": "tsx scripts/mint-token.ts",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:api": "tsx scripts/api-smoke.ts",
-    "test": "npm run smoke && npm run smoke:api",
+    "smoke:jira": "tsx scripts/jira-smoke.ts",
+    "test": "npm run smoke && npm run smoke:api && npm run smoke:jira",
     "google:env": "node scripts/google-env.mjs",
     "coolify": "node scripts/coolify.mjs",
     "site:check": "node --check website/app.js && node scripts/check-site.mjs"

@@ -90,7 +90,9 @@ same as the bot token.
 | `channels:read`, `groups:read` | resolving channel names, and the startup membership check |
 | `chat:write` | posting relays, thread updates, ephemeral errors |
 | `reactions:read`, `reactions:write` | the claim/dismiss triage reactions and command acknowledgements |
-| `users:read` | showing real names instead of raw user IDs, and reading workspace admin status |
+| `users:read` | showing real names instead of raw user IDs, and reading workspace admin and guest status |
+| `users:read.email` | suggesting which Slack member matches each Jira member, by email |
+| `pins:write`, `bookmarks:write` | pinning the sprint boards and adding one bookmark per person as tabs |
 | `im:write` | direct-messaging config changes when no control channel is set |
 | `commands` | the `/relay` slash command |
 

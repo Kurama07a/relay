@@ -69,6 +69,9 @@ In Coolify's **Environment Variables** tab:
 | `SLACK_APP_TOKEN` | `xapp-…` |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | the one-line JSON from step 1 (optional) |
 | `LOG_LEVEL` | `info` |
+| `JIRA_URL` | the Jira site, e.g. `https://yourco.atlassian.net` (optional) |
+| `JIRA_EMAIL` | the Jira account Relay reads as |
+| `JIRA_API_TOKEN` | that account's API token |
 
 Mark the tokens as build-time-secret / hidden if Coolify offers it.
 
@@ -88,8 +91,9 @@ Watch the logs for:
 
 ```
 INFO  relay is up (socket mode)
-INFO  watching #client
-INFO  watching #meeee
+INFO  watching #acme
+INFO  watching #acme-team
+INFO  jira: connected to https://yourco.atlassian.net as … (read-only)
 ```
 
 If it restart-loops with `invalid_auth`, the tokens are wrong or the app was
@@ -151,6 +155,12 @@ same disk isn't one.
 Push to your repo and redeploy in Coolify. The database is on a volume, so
 schema changes apply automatically on boot (every table is created
 `IF NOT EXISTS`, and new columns are additive).
+
+Before a boot changes the schema, Relay copies the database to
+`relay.db.before-v<N>` beside it on the same volume, once per schema version.
+If that copy can't be made, Relay refuses to start rather than upgrade without
+one. The copy guards against a bad migration, not a lost volume — that still
+needs a backup kept somewhere else.
 
 There will be a few seconds of downtime during a redeploy. **Slack does not
 replay Socket Mode events**, so a client message sent in exactly that window is

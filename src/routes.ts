@@ -12,6 +12,11 @@ export interface Route {
   active: number;
   created_at: string;
   created_by: string | null;
+  /** The Jira board this pairing follows, if any, and where its stories go. */
+  sprint_channel: string | null;
+  jira_board_id: number | null;
+  jira_board_name: string | null;
+  jira_project_key: string | null;
 }
 
 /**
@@ -55,6 +60,7 @@ export function watchedChannels(): string[] {
   for (const route of load()) {
     channels.add(route.client_channel);
     channels.add(route.team_channel);
+    if (route.sprint_channel) channels.add(route.sprint_channel);
   }
   return [...channels];
 }
@@ -89,6 +95,16 @@ export function addRoute(input: AddRouteInput): AddRouteResult {
     return {
       ok: false,
       error: "That channel already receives relayed cards for another pairing. It can't also be a client channel.",
+    };
+  }
+  if (
+    listRoutes().some(
+      (route) => route.sprint_channel === input.clientChannel || route.sprint_channel === input.teamChannel,
+    )
+  ) {
+    return {
+      ok: false,
+      error: "That channel holds sprint threads for a Jira board. Pick a different one.",
     };
   }
   if (listRoutes().some((route) => route.client_channel === input.teamChannel)) {
@@ -153,4 +169,50 @@ export function removeRoute(clientChannel: string): Route | null {
 
 export function countRoutes(): number {
   return load().length;
+}
+
+export interface JiraBoardInput {
+  boardId: number;
+  boardName: string;
+  projectKey: string;
+  sprintChannel: string;
+}
+
+/**
+ * Connects a Jira board to a pairing, along with the channel its sprint threads
+ * go to. That channel is client-facing and gets one thread per story, so it has
+ * to be a channel of its own: not either side of any pairing, and not another
+ * board's sprint channel.
+ */
+export function setJiraBoard(
+  routeId: number,
+  input: JiraBoardInput,
+): { ok: true; route: Route } | { ok: false; error: string } {
+  const routes = listRoutes();
+  if (!routes.some((route) => route.id === routeId)) {
+    return { ok: false, error: "That pairing no longer exists." };
+  }
+
+  const clash = routes.some(
+    (route) =>
+      route.client_channel === input.sprintChannel ||
+      route.team_channel === input.sprintChannel ||
+      (route.id !== routeId && route.sprint_channel === input.sprintChannel),
+  );
+  if (clash) {
+    return {
+      ok: false,
+      error: "That channel is already part of a pairing. Sprint threads need a channel of their own.",
+    };
+  }
+
+  db.prepare(
+    `UPDATE routes SET jira_board_id = ?, jira_board_name = ?, jira_project_key = ?, sprint_channel = ?
+     WHERE id = ?`,
+  ).run(input.boardId, input.boardName, input.projectKey, input.sprintChannel, routeId);
+  invalidate();
+
+  const route = listRoutes().find((candidate) => candidate.id === routeId)!;
+  log.info(`route ${route.client_channel} follows jira board ${input.boardId} (${input.projectKey})`);
+  return { ok: true, route };
 }

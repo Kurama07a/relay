@@ -15,6 +15,7 @@
  * works and shows the servers and projects an application has to be attached
  * to, rather than guessing at ids.
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 function loadEnv() {
@@ -80,9 +81,24 @@ function fail(label, result) {
   process.exit(1);
 }
 
-const APP_NAME = env.COOLIFY_APP_NAME ?? "relay";
-const REPO = env.COOLIFY_REPO ?? "https://github.com/Kurama07a/relay";
-const BRANCH = env.COOLIFY_BRANCH ?? "main";
+/**
+ * The repository this checkout was cloned from, as an https URL. A self-hosted
+ * fork deploys itself by default, rather than whoever wrote this script.
+ */
+function originRepo() {
+  try {
+    return execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" })
+      .trim()
+      .replace(/^git@([^:]+):/, "https://$1/")
+      .replace(/\.git$/, "");
+  } catch {
+    return "";
+  }
+}
+
+const APP_NAME = env.COOLIFY_APP_NAME || "relay";
+const REPO = env.COOLIFY_REPO || originRepo();
+const BRANCH = env.COOLIFY_BRANCH || "main";
 
 const commands = {
   /** Read-only. Confirms the token works and shows what things can attach to. */
@@ -133,6 +149,10 @@ then run:  npm run coolify create
 
     if (!server || !project) {
       console.error("Set COOLIFY_SERVER_UUID and COOLIFY_PROJECT_UUID in .env — run `npm run coolify probe` to find them.");
+      process.exit(1);
+    }
+    if (!REPO) {
+      console.error("Set COOLIFY_REPO in .env to the https URL of the repository to deploy — this checkout has no git origin to use.");
       process.exit(1);
     }
 
