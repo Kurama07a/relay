@@ -11,6 +11,7 @@ import {
   formatRounded,
   openSessionFor,
   openSessionsOn,
+  sessionSeconds,
   startSession,
   type SessionSource,
   type WorkSession,
@@ -90,10 +91,10 @@ export async function stopWork(engineer: string): Promise<StopWorkResult | null>
   const task = getTask(closed.task_id);
   if (!task) return null;
 
-  addEvent(task.id, "session:end", engineer, formatExact(sessionLength(closed)));
+  addEvent(task.id, "session:end", engineer, formatExact(sessionSeconds(closed)));
   await refreshInternalMessage(task);
 
-  log.info(`${ref(task)} session ${closed.id} closed (${formatExact(sessionLength(closed))})`);
+  log.info(`${ref(task)} session ${closed.id} closed (${formatExact(sessionSeconds(closed))})`);
   return { session: closed, task };
 }
 
@@ -139,13 +140,4 @@ export async function reopenWork(task: Task, engineer: string, why?: string): Pr
     detail: why,
     clientMessage: notices.reopened(task, why),
   });
-}
-
-function sessionLength(session: WorkSession): number {
-  const end = session.ended_at ?? new Date().toISOString();
-  return Math.max(
-    0,
-    Math.round((new Date(end).getTime() - new Date(session.started_at).getTime()) / 1000) +
-      session.adjustment_seconds,
-  );
 }

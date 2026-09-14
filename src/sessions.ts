@@ -117,16 +117,40 @@ export function endSession(
   return getSession(sessionId);
 }
 
-/** Sources that emit heartbeats, so silence from them means "gone away". */
-const HEARTBEAT_SOURCES: SessionSource[] = ["claude-code", "codex", "cli"];
+/**
+ * Sources that emit heartbeats, so silence from them means "gone away" and the
+ * session is reaped back to its last beat.
+ *
+ * Plain `cli` is deliberately absent. `relay start` is a one-shot command with
+ * nothing feeding it heartbeats, so treating silence as "gone" would reap it
+ * back to its start — which for a session that never beat is the same instant,
+ * recording zero. It is length-capped like a Slack session instead.
+ */
+export const HEARTBEAT_SOURCES: SessionSource[] = ["claude-code", "codex"];
 
-/** Adds a correction, in minutes, to a session's measured span. */
-export function adjustSession(sessionId: number, deltaMinutes: number, note?: string): void {
+/**
+ * Adds a correction, in minutes, to a session's measured span. The cumulative
+ * adjustment is floored so the session's counted time can't go negative — a
+ * fat-fingered `-600` clamps the session to zero rather than silently erasing
+ * real work and hiding it under the per-session floor in {@link sessionSeconds}.
+ *
+ * Returns the session's counted seconds after the correction.
+ */
+export function adjustSession(sessionId: number, deltaMinutes: number, note?: string): number {
+  const session = getSession(sessionId);
+  if (!session) return 0;
+
+  const measured = seconds(session.started_at, session.ended_at ?? now());
+  const adjustment = Math.max(
+    session.adjustment_seconds + Math.round(deltaMinutes * 60),
+    -measured,
+  );
+
   db.prepare(
-    `UPDATE work_sessions
-     SET adjustment_seconds = adjustment_seconds + ?, note = COALESCE(?, note)
-     WHERE id = ?`,
-  ).run(Math.round(deltaMinutes * 60), note ?? null, sessionId);
+    `UPDATE work_sessions SET adjustment_seconds = ?, note = COALESCE(?, note) WHERE id = ?`,
+  ).run(adjustment, note ?? null, sessionId);
+
+  return Math.max(0, measured + adjustment);
 }
 
 /** Elapsed seconds for one session, counting an open one up to right now. */
@@ -186,10 +210,11 @@ export function reapStaleSessions(): WorkSession[] {
       continue;
     }
 
-    // Sessions started from Slack have nothing beating for them, so silence
-    // means nothing. They're capped by length instead, and end at the cap
-    // rather than at their start — backdating to the last heartbeat would
-    // record zero time, since for these that *is* the start.
+    // Sessions with nothing beating for them — started from Slack, or a plain
+    // `relay start` that no editor hook is feeding — can't be judged by
+    // silence. They're capped by length instead, and end at the cap rather
+    // than at their start: backdating to the last heartbeat would record zero
+    // time, since for these that *is* the start.
     const startedAt = new Date(session.started_at).getTime();
     if (Date.now() - startedAt > maxLength) {
       const closed = endSession(
@@ -216,19 +241,27 @@ export function formatExact(totalSeconds: number): string {
 /**
  * Deliberately vague duration for the client.
  *
- * Rounds outward to a granularity that grows with the number, so a figure that
- * reaches a client reads as an honest approximation rather than a timesheet
- * line to be argued with. The exact seconds stay in the ledger.
+ * Rounds to a granularity that grows with the number — quarter hours, then half
+ * hours, then whole hours, then half days — so a figure that reaches a client
+ * reads as an honest approximation rather than a timesheet line to be argued
+ * with. The exact seconds stay in the ledger.
  */
 export function formatRounded(totalSeconds: number): string {
   const minutes = totalSeconds / 60;
 
   if (minutes < 15) return "under 15 minutes";
-  if (minutes < 60) return `about ${Math.round(minutes / 15) * 15} minutes`;
+
+  if (minutes < 60) {
+    const quarters = Math.round(minutes / 15) * 15;
+    // 53–59 min rounds to 60; fall through to the hour bucket rather than
+    // telling the client "about 60 minutes".
+    if (quarters < 60) return `about ${quarters} minutes`;
+  }
 
   const hours = minutes / 60;
   if (hours < 8) {
     const halves = Math.max(1, Math.round(hours * 2) / 2);
+    if (halves === 1) return "about 1 hour";
     return `about ${halves % 1 === 0 ? halves : halves.toFixed(1)} hours`;
   }
 

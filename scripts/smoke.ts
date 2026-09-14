@@ -194,7 +194,7 @@ check("explicit end closes it", Boolean(sessions.getSession(switched.session.id)
 check("engineer now has nothing running", sessions.openSessionFor("U_ENG"), undefined);
 
 // A session that stopped checking in ends at its last heartbeat, not "now".
-const stale = sessions.startSession(second.id, "U_OTHER", "cli");
+const stale = sessions.startSession(second.id, "U_OTHER", "claude-code");
 const longAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
 db2.prepare(`UPDATE work_sessions SET started_at = ?, last_heartbeat_at = ? WHERE id = ?`)
   .run(new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), longAgo, stale.session.id);
@@ -243,11 +243,49 @@ check(
   8,
 );
 
-sessions.adjustSession(stale.session.id, -30, "left it running");
+// A plain `relay start` session (source "cli") has no heartbeats behind it —
+// nothing runs `relay heartbeat` for it — so the heartbeat timeout must not
+// touch it, or a forgotten `relay stop` after 40 real minutes would be
+// backdated to its start and record zero.
+const manualCli = sessions.startSession(task.id, "U_CLI", "cli");
+db2.prepare(`UPDATE work_sessions SET started_at = ?, last_heartbeat_at = ? WHERE id = ?`)
+  .run(
+    new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+    manualCli.session.id,
+  );
+check("a quiet cli session survives the heartbeat timeout", sessions.reapStaleSessions().length, 0);
+check(
+  "and still counts its real time, not zero",
+  Math.round(sessions.sessionSeconds(sessions.getSession(manualCli.session.id)!) / 600),
+  4,
+);
+
+// It is length-capped like a Slack session, not backdated to zero.
+db2.prepare(`UPDATE work_sessions SET started_at = ?, last_heartbeat_at = ? WHERE id = ?`)
+  .run(
+    new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
+    new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(),
+    manualCli.session.id,
+  );
+check("a cli session past the cap is reaped", sessions.reapStaleSessions().length, 1);
+check(
+  "cli session capped at the maximum, not zeroed",
+  Math.round(sessions.sessionSeconds(sessions.getSession(manualCli.session.id)!) / 3600),
+  8,
+);
+
+const adjusted = sessions.adjustSession(stale.session.id, -30, "left it running");
 check(
   "adjustment reduces the total",
   Math.round(sessions.sessionSeconds(sessions.getSession(stale.session.id)!) / 60),
   30,
+);
+check("adjustment returns the counted seconds", Math.round(adjusted / 60), 30);
+check(
+  "an over-large negative correction floors the session at zero",
+  sessions.adjustSession(stale.session.id, -999, "way too much"),
+  0,
 );
 
 const effort = sessions.effortFor(second.id);
@@ -261,6 +299,10 @@ check("exact, hours and minutes", sessions.formatExact(4 * 3600 + 22 * 60), "4h 
 check("exact, whole hours", sessions.formatExact(3 * 3600), "3h");
 check("rounded, trivial", sessions.formatRounded(8 * 60), "under 15 minutes");
 check("rounded, to the quarter hour", sessions.formatRounded(40 * 60), "about 45 minutes");
+check("rounded never says sixty minutes", sessions.formatRounded(58 * 60), "about 1 hour");
+check("rounded, exactly one hour is singular", sessions.formatRounded(60 * 60), "about 1 hour");
+check("rounded, just over the hour stays 'about 1 hour'", sessions.formatRounded(67 * 60), "about 1 hour");
+check("rounded, ninety minutes is 1.5 hours", sessions.formatRounded(90 * 60), "about 1.5 hours");
 check("rounded, to the half hour", sessions.formatRounded(4 * 3600 + 22 * 60), "about 4.5 hours");
 check("rounded hides the exact figure", sessions.formatRounded(3 * 3600 + 58 * 60), "about 4 hours");
 check("rounded, long jobs become days", sessions.formatRounded(19 * 3600), "about 3 days of work");

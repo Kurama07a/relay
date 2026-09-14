@@ -24,6 +24,7 @@ import {
   type TaskKind,
 } from "../store.js";
 import {
+  HEARTBEAT_SOURCES,
   adjustSession,
   effortFor,
   formatExact,
@@ -147,9 +148,19 @@ async function dispatch(
         );
         return;
       }
-      adjustSession(open.id, Number(match[1]), match[2] || undefined);
+      const delta = Number(match[1]);
+      const counted = adjustSession(open.id, delta, match[2] || undefined);
       addEvent(task.id, "time_adjust", actor, rest);
       await refreshInternalMessage(task);
+      await postEphemeral(
+        message.channel,
+        actor,
+        `Adjusted by ${delta > 0 ? "+" : ""}${delta}m — this session now counts *${formatExact(counted)}*.` +
+          (counted === 0 && delta < 0
+            ? " (That correction was larger than the time on the session, so it's floored at zero.)"
+            : ""),
+        thread,
+      );
       await ack();
       return;
     }
@@ -307,7 +318,9 @@ function sessionBreakdown(task: Task): string {
   const lines = sessions.map((session) => {
     const state = session.ended_at
       ? session.end_reason === "reaped"
-        ? " _(auto-closed — no heartbeat)_"
+        ? HEARTBEAT_SOURCES.includes(session.source)
+          ? " _(auto-closed — no heartbeat)_"
+          : " _(auto-closed — hit the time cap)_"
         : session.end_reason === "superseded"
           ? " _(auto-paused — moved to another task)_"
           : ""

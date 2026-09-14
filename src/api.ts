@@ -358,8 +358,8 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
       if (!Number.isFinite(minutes)) throw new HttpError(400, "minutes must be a number.");
       const open = openSessionFor(engineer);
       if (!open) throw new HttpError(404, "You have no active session to adjust.");
-      adjustSession(open.id, minutes, body.note as string | undefined);
-      return { adjusted: minutes, elapsed: formatExact(sessionSeconds(openSessionFor(engineer)!)) };
+      const counted = adjustSession(open.id, minutes, body.note as string | undefined);
+      return { adjusted: minutes, elapsed: formatExact(counted) };
     },
   },
 

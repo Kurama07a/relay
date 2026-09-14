@@ -13,7 +13,7 @@ import { ICON } from "./slack/design.js";
 import { postToInternal, refreshInternalMessage } from "./slack/actions.js";
 import { countByStatus, getTask } from "./store.js";
 import { startApi } from "./api.js";
-import { formatExact, reapStaleSessions, sessionSeconds } from "./sessions.js";
+import { HEARTBEAT_SOURCES, formatExact, reapStaleSessions, sessionSeconds } from "./sessions.js";
 import { startSheetSync } from "./sheets.js";
 
 /**
@@ -63,10 +63,9 @@ function startSessionReaper(): NodeJS.Timeout {
         // Say so in the thread. A clock that stops on its own and tells nobody
         // is how someone comes back hours later, types `!stop`, and is told
         // they had no session running.
-        const why =
-          session.source === "slack"
-            ? `it hit the ${config.sessions.maxHours}h limit for sessions started here`
-            : `your editor stopped checking in for ${config.sessions.staleAfterMinutes} minutes`;
+        const why = HEARTBEAT_SOURCES.includes(session.source)
+          ? `your editor stopped checking in for ${config.sessions.staleAfterMinutes} minutes`
+          : `it hit the ${config.sessions.maxHours}h cap for sessions that don't send heartbeats`;
 
         await postToInternal(
           task,
