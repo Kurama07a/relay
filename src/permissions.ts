@@ -179,3 +179,8 @@ export async function canSeeTasks(userId: string): Promise<Decision> {
     reason: "Relay's task lists are only available to people in a team channel. Ask to be added to one.",
   };
 }
+
+/** Whether someone is a guest account — in this workspace, a client. */
+export async function isGuest(userId: string): Promise<boolean> {
+  return (await workspaceRole(userId)).isGuest;
+}

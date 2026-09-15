@@ -78,13 +78,13 @@ export const notices = {
   },
 
   /**
-   * The completion message. Effort is phrased loosely and lives in the
+   * The completion message. Effort is the logged slab and lives in the
    * footnote — precise figures invite a line-item argument about work that was
    * already agreed, and the exact total stays in the internal ledger.
    */
-  done(_task: Task, name: string, note: string | undefined, roundedEffort: string | null): Notice {
+  done(_task: Task, name: string, note: string | undefined, loggedEffort: string | null): Notice {
     const lead = note ? `${ICON.done} Done — ${note}` : `${ICON.done} Done.`;
-    return say(lead, dot(name, roundedEffort));
+    return say(lead, dot(name, loggedEffort));
   },
 
   reopened(task: Task, why?: string): Notice {

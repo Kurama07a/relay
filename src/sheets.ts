@@ -207,7 +207,15 @@ function watermark(): string {
     )
     .get() as { n: number; t: string };
 
-  return `${tasks.n}:${tasks.t}|${events.n}|${sessions.n}:${sessions.t}`;
+  // Jira syncs change subtasks, and closing work writes logs, without touching tasks.
+  const subtasks = db
+    .prepare(`SELECT COUNT(*) AS n, COALESCE(MAX(updated_at), '') AS t FROM subtasks`)
+    .get() as { n: number; t: string };
+  const logs = db
+    .prepare(`SELECT COUNT(*) AS n, COALESCE(MAX(closed_at), '') AS t FROM work_logs`)
+    .get() as { n: number; t: string };
+
+  return `${tasks.n}:${tasks.t}|${events.n}|${sessions.n}:${sessions.t}|${subtasks.n}:${subtasks.t}|${logs.n}:${logs.t}`;
 }
 
 function clamp(sheet: Sheet): string[][] {

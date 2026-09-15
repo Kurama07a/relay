@@ -2,7 +2,7 @@ import type { KnownBlock, PlainTextOption, View } from "@slack/types";
 import { app, client } from "./app.js";
 import { actionContext, announce, denyIfNotAdmin, postingProblem } from "./admin.js";
 import { channelName } from "./names.js";
-import { dot, ICON, truncate } from "./design.js";
+import { dateRange, dot, ICON, truncate } from "./design.js";
 import { config } from "../config.js";
 import { log } from "../log.js";
 import { listRoutes, setJiraBoard, type Route } from "../routes.js";
@@ -15,7 +15,6 @@ import {
   listBoards,
   myself,
   type BoardColumn,
-  type JiraSprint,
 } from "../jira/client.js";
 import {
   BUCKETS,
@@ -37,6 +36,7 @@ import {
   type LinkChoice,
   type SlackPerson,
 } from "../jira/members.js";
+import { syncJiraNow } from "../jira/sync.js";
 
 /**
  * Jira setup from inside Slack: which board a pairing follows, how that
@@ -49,20 +49,6 @@ const MAP_COLUMNS = "relay_jira_columns";
 const LINK_MEMBERS = "relay_jira_members";
 
 const plain = (text: string) => ({ type: "plain_text" as const, text });
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function shortDate(iso: string | undefined): string {
-  if (!iso) return "?";
-  const date = new Date(iso);
-  return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
-}
-
-function sprintDates(sprint: JiraSprint): string {
-  return sprint.startDate || sprint.endDate
-    ? ` · ${shortDate(sprint.startDate)} – ${shortDate(sprint.endDate)}`
-    : "";
-}
 
 function boardLabel(route: Route): string {
   return route.jira_board_name ?? `board ${route.jira_board_id}`;
@@ -362,6 +348,7 @@ async function membersModal(route: Route): Promise<View> {
     const initial = member.slack_user ?? suggestion?.slackUser;
     const hint = [
       member.email ?? "Email hidden in Jira",
+      initial && people.get(initial)?.isGuest ? "Guest in Slack" : null,
       suggestion ? `Suggested by ${suggestion.via}, check before saving` : null,
     ]
       .filter(Boolean)
@@ -486,6 +473,7 @@ export function registerJiraAdmin(): void {
         `*${await channelName(result.route.client_channel)}*, with sprint threads in *${await channelName(sprintChannel)}*.${note}`,
       body.user.id,
     );
+    void syncJiraNow();
   });
 
   app.view(MAP_COLUMNS, async ({ ack, body, view }) => {
@@ -509,6 +497,7 @@ export function registerJiraAdmin(): void {
         ".",
       body.user.id,
     );
+    void syncJiraNow();
   });
 
   app.view(LINK_MEMBERS, async ({ ack, body, view }) => {
@@ -546,6 +535,7 @@ export function registerJiraAdmin(): void {
       `${ICON.note} <@${body.user.id}> linked ${linked} of ${choices.length} Jira members to Slack.`,
       body.user.id,
     );
+    void syncJiraNow();
   });
 }
 
@@ -564,6 +554,11 @@ export async function jiraCommand(rest: string): Promise<string> {
 
   if (!jiraConfigured()) {
     return `${ICON.warning} Jira isn't configured. Set JIRA_URL, JIRA_EMAIL and JIRA_API_TOKEN on the server, then restart Relay.`;
+  }
+
+  if (action.toLowerCase() === "sync") {
+    await syncJiraNow();
+    return `${ICON.done} Synced with Jira. Stories, cards and boards are up to date.`;
   }
 
   const lines: string[] = [];
@@ -587,7 +582,11 @@ export async function jiraCommand(rest: string): Promise<string> {
     );
     try {
       const sprint = await activeSprint(route.jira_board_id!);
-      lines.push(sprint ? `Active sprint: *${sprint.name}*${sprintDates(sprint)}` : "_No active sprint._");
+      lines.push(
+        sprint
+          ? dot(`Active sprint: *${sprint.name}*`, dateRange(sprint.startDate, sprint.endDate))
+          : "_No active sprint._",
+      );
     } catch (error) {
       lines.push(`${ICON.warning} ${describeJiraError(error)}`);
     }

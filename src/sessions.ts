@@ -2,11 +2,13 @@ import { db } from "./db.js";
 import { config } from "./config.js";
 
 export type SessionSource = "claude-code" | "codex" | "cli" | "slack";
-export type EndReason = "explicit" | "reaped" | "superseded";
+export type EndReason = "explicit" | "reaped" | "superseded" | "archived";
 
 export interface WorkSession {
   id: number;
   task_id: number;
+  /** The subtask the time was spent on, for stories that have them. */
+  subtask_id: number | null;
   engineer: string;
   source: SessionSource;
   started_at: string;
@@ -58,10 +60,11 @@ export function startSession(
   taskId: number,
   engineer: string,
   source: SessionSource = "cli",
+  subtaskId: number | null = null,
 ): StartResult {
   const existing = openSessionFor(engineer);
 
-  if (existing?.task_id === taskId) {
+  if (existing?.task_id === taskId && (existing.subtask_id ?? null) === subtaskId) {
     // Already running on this task — treat as a heartbeat, not a new session.
     heartbeat(existing.id);
     return { session: getSession(existing.id)!, superseded: null, firstEver: false };
@@ -78,10 +81,10 @@ export function startSession(
 
   const result = db
     .prepare(
-      `INSERT INTO work_sessions (task_id, engineer, source, started_at, last_heartbeat_at)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO work_sessions (task_id, subtask_id, engineer, source, started_at, last_heartbeat_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
-    .run(taskId, engineer, source, timestamp, timestamp);
+    .run(taskId, subtaskId, engineer, source, timestamp, timestamp);
 
   return { session: getSession(Number(result.lastInsertRowid))!, superseded, firstEver };
 }
@@ -157,6 +160,22 @@ export function adjustSession(sessionId: number, deltaMinutes: number, note?: st
 export function sessionSeconds(session: WorkSession): number {
   const end = session.ended_at ?? now();
   return Math.max(0, seconds(session.started_at, end) + session.adjustment_seconds);
+}
+
+/**
+ * Exact seconds per engineer for one unit of work: a subtask, or the task's
+ * own time when `subtaskId` is null. This is what a slab is computed from.
+ */
+export function secondsByEngineer(taskId: number, subtaskId: number | null): Map<string, number> {
+  const sessions = db
+    .prepare(`SELECT * FROM work_sessions WHERE task_id = ? AND subtask_id IS ?`)
+    .all(taskId, subtaskId) as WorkSession[];
+
+  const totals = new Map<string, number>();
+  for (const session of sessions) {
+    totals.set(session.engineer, (totals.get(session.engineer) ?? 0) + sessionSeconds(session));
+  }
+  return totals;
 }
 
 export interface Effort {

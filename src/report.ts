@@ -1,8 +1,13 @@
 import { db } from "./db.js";
 import { listTasks, ref, type Task } from "./store.js";
-import { effortFor, formatExact, formatRounded, sessionsFor, sessionSeconds } from "./sessions.js";
-import { STATUS, KIND } from "./slack/design.js";
+import { effortFor, formatExact, secondsByEngineer, sessionsFor, sessionSeconds } from "./sessions.js";
+import { formatSlab } from "./slabs.js";
+import { loggedForSubtask, loggedSeconds } from "./worklogs.js";
+import { BUCKET_STYLE, KIND, STATUS } from "./slack/design.js";
 import { knownName } from "./slack/names.js";
+import { isBucket } from "./jira/buckets.js";
+import { displayName } from "./jira/members.js";
+import { subtasksFor } from "./jira/stories.js";
 
 /**
  * Turns the ledger into flat rows for anything that isn't Slack — CSV files,
@@ -24,8 +29,20 @@ function date(value: string | null): string {
   return value ? value.replace("T", " ").slice(0, 19) : "";
 }
 
+const hours = (seconds: number) => (seconds > 0 ? (seconds / 3600).toFixed(2) : "");
+
+function owner(slackUser: string | null, jiraAccount: string | null): string {
+  if (slackUser) return knownName(slackUser);
+  if (jiraAccount) return displayName(jiraAccount);
+  return "";
+}
+
+function groupLabel(bucket: string | null): string {
+  return bucket && isBucket(bucket) ? BUCKET_STYLE[bucket].label : "";
+}
+
 export function tasksSheet(): Sheet {
-  const tasks = listTasks({ limit: 100_000 }).reverse(); // oldest first reads better
+  const tasks = listTasks({ limit: 100_000, includeArchived: true }).reverse(); // oldest first reads better
   return {
     name: "Tasks",
     header: [
@@ -42,29 +59,30 @@ export function tasksSheet(): Sheet {
       "Completed",
       "Effort",
       "Effort (hours)",
-      "Told client",
+      "Logged",
       "Sessions",
       "Slack link",
       "Request",
     ],
     rows: tasks.map((task) => {
       const effort = effortFor(task.id);
+      const logged = loggedSeconds(task.id);
       return [
         ref(task),
         STATUS[task.status].label,
         KIND[task.kind].label,
         task.title,
-        knownName(task.client_user),
+        task.source === "jira" ? task.jira_key ?? "" : knownName(task.client_user),
         knownName(task.client_channel),
-        task.assignee ? knownName(task.assignee) : "",
+        owner(task.assignee, task.jira_assignee),
         date(task.created_at),
         date(task.claimed_at),
         date(task.started_at),
         date(task.completed_at),
         effort.totalSeconds > 0 ? formatExact(effort.totalSeconds) : "",
         // A number, so the spreadsheet can sum and average it.
-        effort.totalSeconds > 0 ? (effort.totalSeconds / 3600).toFixed(2) : "",
-        effort.totalSeconds > 0 ? formatRounded(effort.totalSeconds) : "",
+        hours(effort.totalSeconds),
+        logged > 0 ? formatSlab(logged) : "",
         String(effort.sessionCount),
         task.client_permalink ?? "",
         task.body.replace(/\r?\n/g, " ").trim(),
@@ -74,7 +92,7 @@ export function tasksSheet(): Sheet {
 }
 
 export function sessionsSheet(): Sheet {
-  const tasks = listTasks({ limit: 100_000 }).reverse();
+  const tasks = listTasks({ limit: 100_000, includeArchived: true }).reverse();
   const rows: string[][] = [];
 
   for (const task of tasks) {
@@ -145,7 +163,7 @@ export function eventsSheet(): Sheet {
 
 /** A small at-a-glance tab: counts and totals, so nobody has to write formulas. */
 export function summarySheet(): Sheet {
-  const tasks = listTasks({ limit: 100_000 });
+  const tasks = listTasks({ limit: 100_000, includeArchived: true });
   const rows: string[][] = [];
 
   const byStatus = new Map<string, number>();
@@ -180,8 +198,98 @@ export function summarySheet(): Sheet {
   return { name: "Summary", header: ["Group", "Item", "Value"], rows };
 }
 
+/** Every story in a running sprint, each followed by its subtasks. */
+export function currentSprintSheet(): Sheet {
+  const stories = db
+    .prepare(
+      `SELECT t.*, s.name AS sprint_name FROM tasks t LEFT JOIN sprints s ON s.jira_sprint_id = t.sprint_id
+       WHERE t.source = 'jira' AND t.archived_at IS NULL ORDER BY t.jira_key`,
+    )
+    .all() as Array<Task & { sprint_name: string | null }>;
+  const rows: string[][] = [];
+
+  for (const story of stories) {
+    const exact = effortFor(story.id).totalSeconds;
+    rows.push([
+      story.jira_key ?? ref(story),
+      "",
+      story.title,
+      owner(story.assignee, story.jira_assignee),
+      story.jira_status ?? "",
+      groupLabel(story.bucket),
+      STATUS[story.status].label,
+      exact > 0 ? formatExact(exact) : "",
+      hours(exact),
+      hours(loggedSeconds(story.id)),
+      story.sprint_name ?? "",
+    ]);
+
+    for (const subtask of subtasksFor(story.id)) {
+      const subExact = [...secondsByEngineer(story.id, subtask.id).values()].reduce((sum, seconds) => sum + seconds, 0);
+      rows.push([
+        subtask.jira_key,
+        story.jira_key ?? "",
+        subtask.title,
+        owner(subtask.assignee, subtask.jira_assignee),
+        subtask.jira_status ?? "",
+        groupLabel(subtask.bucket),
+        subtask.done_at ? "Done" : "Open",
+        subExact > 0 ? formatExact(subExact) : "",
+        hours(subExact),
+        hours(loggedForSubtask(subtask.id)),
+        story.sprint_name ?? "",
+      ]);
+    }
+  }
+
+  return {
+    name: "Current sprint",
+    header: [
+      "Issue",
+      "Story",
+      "Title",
+      "Owner",
+      "Jira status",
+      "Group",
+      "In Relay",
+      "Exact",
+      "Exact (hours)",
+      "Logged (hours)",
+      "Sprint",
+    ],
+    rows,
+  };
+}
+
+/** One row per story from an ended sprint, with what it logged. */
+export function pastSprintsSheet(): Sheet {
+  const stories = db
+    .prepare(
+      `SELECT t.*, s.name AS sprint_name, s.start_at AS sprint_start, s.end_at AS sprint_end
+       FROM tasks t LEFT JOIN sprints s ON s.jira_sprint_id = t.sprint_id
+       WHERE t.source = 'jira' AND t.archived_at IS NOT NULL
+       ORDER BY t.archived_at DESC, t.jira_key`,
+    )
+    .all() as Array<Task & { sprint_name: string | null; sprint_start: string | null; sprint_end: string | null }>;
+
+  return {
+    name: "Past sprints",
+    header: ["Sprint", "Dates", "Issue", "Title", "Owner", "Logged (hours)", "Times carried", "Archived"],
+    rows: stories.map((story) => [
+      story.sprint_name ?? "",
+      [date(story.sprint_start).slice(0, 10), date(story.sprint_end).slice(0, 10)].filter(Boolean).join(" → "),
+      story.jira_key ?? ref(story),
+      story.title,
+      owner(story.assignee, story.jira_assignee),
+      hours(loggedSeconds(story.id)),
+      String(story.carried_count),
+      date(story.archived_at),
+    ]),
+  };
+}
+
 export function allSheets(): Sheet[] {
-  return [summarySheet(), tasksSheet(), sessionsSheet(), eventsSheet()];
+  return [summarySheet(), tasksSheet(), sessionsSheet(), eventsSheet(), currentSprintSheet(), pastSprintsSheet()];
 }
 
 /**

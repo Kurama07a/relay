@@ -1,14 +1,14 @@
 import { assign, postToInternal, refreshInternalMessage, transition } from "./actions.js";
 import { notices } from "./notices.js";
-import { ICON } from "./design.js";
+import { dot, ICON } from "./design.js";
 import { userName } from "./names.js";
+import { config } from "../config.js";
 import { log } from "../log.js";
 import { addEvent, getTask, ref, type Task } from "../store.js";
 import {
   effortFor,
   endSession,
   formatExact,
-  formatRounded,
   openSessionFor,
   openSessionsOn,
   sessionSeconds,
@@ -16,6 +16,9 @@ import {
   type SessionSource,
   type WorkSession,
 } from "../sessions.js";
+import { formatSlab, needsSplitting } from "../slabs.js";
+import { closeUnit, loggedSeconds } from "../worklogs.js";
+import { markSubtaskDone, subtasksFor, type Subtask } from "../jira/stories.js";
 
 /**
  * Work-session lifecycle, shared by the API and the Slack thread commands.
@@ -37,23 +40,25 @@ export async function startWork(
   task: Task,
   engineer: string,
   source: SessionSource = "cli",
+  subtask: Subtask | null = null,
 ): Promise<StartWorkResult> {
-  // Picking work up from an editor is as much a claim as reacting in Slack.
-  const owned = task.assignee ? task : await assign(task, engineer, engineer);
+  // Picking work up from an editor is as much a claim as reacting in Slack —
+  // except for sprint stories, which are assigned in Jira and nowhere else.
+  const owned = task.source === "jira" || task.assignee ? task : await assign(task, engineer, engineer);
 
-  const { session, superseded, firstEver } = startSession(owned.id, engineer, source);
+  const { session, superseded, firstEver } = startSession(owned.id, engineer, source, subtask?.id ?? null);
   const isFirstStart = !owned.started_at;
 
   const updated = await transition(owned, "in_progress", engineer, {
     fields: owned.started_at ? {} : { started_at: session.started_at },
-    detail: `session ${session.id} via ${source}`,
+    detail: `session ${session.id} via ${source}${subtask ? ` on ${subtask.jira_key}` : ""}`,
     // Only the very first start is announced; resumes stay internal.
     clientMessage: isFirstStart
       ? notices.started(owned, await userName(engineer))
       : undefined,
   });
 
-  addEvent(updated.id, "session:start", engineer, source);
+  addEvent(updated.id, "session:start", engineer, subtask ? `${source} on ${subtask.jira_key}` : source);
 
   if (superseded) {
     const other = getTask(superseded.task_id);
@@ -98,39 +103,89 @@ export async function stopWork(engineer: string): Promise<StopWorkResult | null>
   return { session: closed, task };
 }
 
+function splitNote(exactSeconds: number): string {
+  return needsSplitting(exactSeconds)
+    ? `\n${ICON.warning} That's over ${config.slabs.splitWarningHours}h on one piece of work — worth splitting it next time.`
+    : "";
+}
+
 /**
- * Marks the task done and tells the client how long it took — rounded, because
- * a precise figure invites a line-item argument about work that was already
- * agreed. The exact total stays in the ledger for capacity planning.
+ * Closes one subtask of a story: stops the clocks on it and fixes its slab.
+ * Nothing is said to the client beyond the tick on their card.
+ */
+export async function finishSubtask(
+  task: Task,
+  subtask: Subtask,
+  engineer: string,
+): Promise<{ exactSeconds: number; slabSeconds: number }> {
+  for (const session of openSessionsOn(task.id)) {
+    if (session.subtask_id === subtask.id) endSession(session.id, "explicit");
+  }
+
+  const unit = closeUnit(task.id, subtask.id);
+  markSubtaskDone(subtask.id, engineer);
+  addEvent(task.id, "subtask:done", engineer, `${subtask.jira_key} exact=${unit.exactSeconds}s logged=${unit.slabSeconds}s`);
+
+  await refreshInternalMessage(getTask(task.id)!);
+  await postToInternal(
+    task,
+    dot(
+      `${ICON.done} *${subtask.jira_key}* closed by <@${engineer}>`,
+      unit.exactSeconds > 0
+        ? `${formatExact(unit.exactSeconds)} → logged *${formatSlab(unit.slabSeconds)}*`
+        : "no time recorded on it",
+    ) + splitNote(unit.exactSeconds),
+  );
+
+  return { exactSeconds: unit.exactSeconds, slabSeconds: unit.slabSeconds };
+}
+
+/**
+ * Marks the task done and tells the client what was logged. Time is fixed into
+ * slabs here — per subtask for a story, per task otherwise — because a precise
+ * figure invites a line-item argument about work that was already agreed. The
+ * exact total stays in the ledger.
  */
 export async function finishWork(
   task: Task,
   engineer: string,
   note?: string,
-): Promise<{ task: Task; effortSeconds: number }> {
+): Promise<{ task: Task; effortSeconds: number; loggedSeconds: number }> {
   for (const session of openSessionsOn(task.id)) {
     endSession(session.id, "explicit");
   }
 
+  // Closing a story closes whatever subtasks are still open, each logged on its own.
+  if (task.source === "jira") {
+    for (const subtask of subtasksFor(task.id)) {
+      if (subtask.done_at) continue;
+      closeUnit(task.id, subtask.id);
+      markSubtaskDone(subtask.id, engineer);
+    }
+  }
+  const own = closeUnit(task.id, null);
+
   const effort = effortFor(task.id);
-  const name = await userName(engineer);
-  const rounded = effort.totalSeconds > 0 ? formatRounded(effort.totalSeconds) : null;
+  const logged = loggedSeconds(task.id);
+  const told = logged > 0 ? formatSlab(logged) : null;
 
   const updated = await transition(task, "done", engineer, {
     fields: { completed_at: new Date().toISOString() },
     detail: note,
-    clientMessage: notices.done(task, name, note, rounded),
+    clientMessage: notices.done(task, await userName(engineer), note, told),
   });
 
   if (effort.totalSeconds > 0) {
     await postToInternal(
       updated,
-      `${ICON.timer} Logged *${formatExact(effort.totalSeconds)}* across ${effort.sessionCount} session${effort.sessionCount === 1 ? "" : "s"}. The client was told "${rounded}".`,
+      `${ICON.timer} Exact time *${formatExact(effort.totalSeconds)}* across ${effort.sessionCount} session${effort.sessionCount === 1 ? "" : "s"}, logged as *${told ?? "0h"}*. ` +
+        (told ? `The client was told "${told}".` : "The client wasn't given a time.") +
+        splitNote(own.exactSeconds),
     );
   }
 
-  addEvent(updated.id, "effort", engineer, `${effort.totalSeconds}s`);
-  return { task: updated, effortSeconds: effort.totalSeconds };
+  addEvent(updated.id, "effort", engineer, `exact=${effort.totalSeconds}s logged=${logged}s`);
+  return { task: updated, effortSeconds: effort.totalSeconds, loggedSeconds: logged };
 }
 
 /** Reopens a completed task, e.g. when the client says it isn't fixed. */

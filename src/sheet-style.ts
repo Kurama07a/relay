@@ -8,7 +8,7 @@ import type { Sheet } from "./report.js";
  * with, so formatting is applied once rather than on every sync — it costs API
  * calls and never changes between them.
  */
-export const STYLE_VERSION = "5";
+export const STYLE_VERSION = "6";
 
 export interface Rgb {
   red: number;
@@ -72,6 +72,8 @@ const WIDTHS: Record<string, number[]> = {
   Tasks: [70, 120, 90, 340, 130, 140, 130, 130, 130, 130, 130, 90, 110, 150, 80, 200, 420],
   Sessions: [70, 280, 140, 110, 130, 130, 150, 90, 80, 130, 260],
   Activity: [70, 130, 140, 140, 460],
+  "Current sprint": [110, 110, 320, 150, 130, 110, 100, 90, 100, 110, 220],
+  "Past sprints": [220, 180, 110, 320, 150, 110, 100, 150],
 };
 
 /** Columns holding a number, so the sheet can sum them rather than treat as text. */
@@ -80,6 +82,8 @@ const NUMERIC: Record<string, number[]> = {
   Sessions: [8, 9], // Hours, Adjustment (min)
   Summary: [],
   Activity: [],
+  "Current sprint": [8, 9], // Exact (hours), Logged (hours)
+  "Past sprints": [5, 6], // Logged (hours), Times carried
 };
 
 /** Long free text: clipped rather than wrapped, so rows stay one line tall. */
@@ -88,6 +92,8 @@ const CLIPPED: Record<string, number[]> = {
   Sessions: [1, 10],
   Activity: [4],
   Summary: [],
+  "Current sprint": [2],
+  "Past sprints": [3],
 };
 
 const TAB_COLORS: Record<string, string> = {
@@ -95,6 +101,8 @@ const TAB_COLORS: Record<string, string> = {
   Tasks: "#5B8DEF",
   Sessions: "#22B8CF",
   Activity: "#8B8D98",
+  "Current sprint": "#6E56CF",
+  "Past sprints": "#8B8D98",
 };
 
 /** Row 1 is a merged banner; row 2 the column headers; data starts at row 3. */

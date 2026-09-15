@@ -17,6 +17,10 @@ import { HEARTBEAT_SOURCES, formatExact, reapStaleSessions, sessionSeconds } fro
 import { startSheetSync } from "./sheets.js";
 import { describeJiraError, jiraConfigured, myself } from "./jira/client.js";
 import { registerJiraAdmin } from "./slack/jira-admin.js";
+import { onBoardSynced, startJiraSync } from "./jira/sync.js";
+import { refreshDesksFor, scheduleDesks } from "./slack/desk.js";
+import { registerDesks } from "./slack/panels.js";
+import { onStoryActivity } from "./slack/actions.js";
 
 /**
  * Warns about channels the bot cannot actually read. Missing membership is the
@@ -169,6 +173,7 @@ async function main(): Promise<void> {
   registerCommands();
   registerAdmin();
   registerJiraAdmin();
+  registerDesks();
 
   app.error(async (error) => {
     log.error("unhandled bolt error", error);
@@ -189,6 +194,11 @@ async function main(): Promise<void> {
   startApi();
   startSessionReaper();
   startSheetSync();
+
+  // The desks re-render after every Jira sync and whenever a story changes in Relay.
+  onBoardSynced(scheduleDesks);
+  onStoryActivity(refreshDesksFor);
+  startJiraSync();
 
   await checkMembership();
   await checkJira();

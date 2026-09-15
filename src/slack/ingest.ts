@@ -5,7 +5,8 @@ import { ICON } from "./design.js";
 import { channelName, userName } from "./names.js";
 import { classify, titleFrom } from "../classify.js";
 import { config } from "../config.js";
-import { routeForClient, type Route } from "../routes.js";
+import { routeForClient, routeForSprintChannel, type Route } from "../routes.js";
+import { postEphemeral } from "./actions.js";
 import { log } from "../log.js";
 import {
   addEvent,
@@ -31,6 +32,20 @@ export function registerIngest(): void {
         } else {
           await relayNewRequest(route, message.ts, message.user, message.text);
         }
+        return;
+      }
+
+      // Stories are worked from the pinned Sprint desk, not from messages here.
+      // Anything posted in the channel gets pointed there, privately.
+      const sprintRoute = routeForSprintChannel(message.channel);
+      if (sprintRoute) {
+        await postEphemeral(
+          message.channel,
+          message.user,
+          "To send the team something about a story, use the pinned *Sprint desk*: pick the story and add an update. " +
+            `For anything new, post in ${await channelName(sprintRoute.client_channel)}.`,
+          message.threadTs ?? undefined,
+        );
         return;
       }
 

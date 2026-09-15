@@ -8,6 +8,10 @@ import { join } from "node:path";
 import type { JiraUser } from "../src/jira/client.js";
 import type { SlackPerson } from "../src/jira/members.js";
 
+// Importing the sync module constructs the Slack app, whose auth check against
+// these fake tokens rejects in the background. That's expected here.
+process.on("unhandledRejection", () => {});
+
 // Must be set before ./src/config.ts is imported, since it reads them on load.
 const scratch = mkdtempSync(join(tmpdir(), "relay-jira-"));
 process.env.SLACK_BOT_TOKEN = "xoxb-test";
@@ -246,9 +250,30 @@ check(
   ["a-priya"],
 );
 check(
-  "a guest can't be linked",
+  "a guest can be linked — client staff own Jira issues too",
   Object.keys(members.linkProblems([{ accountId: "a-arjun", slackUser: "U_CLIENT" }], peopleById)),
-  ["a-arjun"],
+  [],
+);
+check(
+  "a guest is suggested when nobody on the team matches",
+  members
+    .suggestLinks(
+      [
+        {
+          jira_account_id: "a-jane",
+          display_name: "Jane Client",
+          email: null,
+          active: 1,
+          slack_user: null,
+          linked_by: null,
+          linked_at: null,
+          updated_at: "",
+        },
+      ],
+      people,
+    )
+    .get("a-jane"),
+  { slackUser: "U_CLIENT", via: "name" },
 );
 check(
   "an app can't be linked",
@@ -402,6 +427,111 @@ check(
   routes.addRoute({ clientChannel: "C_OTHER", teamChannel: "C_SPRINT" }).ok,
   false,
 );
+
+console.log("\ntime slabs");
+const slabs = await import("../src/slabs.js");
+const minutes = (value: number) => value * 60;
+check("under 5 minutes logs nothing", slabs.slabSeconds(minutes(4)), 0);
+check("5 minutes is half an hour", slabs.slabSeconds(minutes(5)), 1800);
+check("19 minutes is still half an hour", slabs.slabSeconds(minutes(19)), 1800);
+check("20 minutes is an hour", slabs.slabSeconds(minutes(20)), 3600);
+check("1h 19m is still an hour", slabs.slabSeconds(minutes(79)), 3600);
+check("1h 20m is two hours", slabs.slabSeconds(minutes(80)), 7200);
+check("2h 20m is three hours", slabs.slabSeconds(minutes(140)), 10800);
+check("formatting", [0, 1800, 3600, 5400, 25200].map(slabs.formatSlab), ["0h", "30m", "1h", "1h 30m", "7h"]);
+check("12 hours on one unit suggests splitting", slabs.needsSplitting(12 * 3600), true);
+check("just under does not", slabs.needsSplitting(12 * 3600 - 60), false);
+
+console.log("\nwork logs");
+const worklogs = await import("../src/worklogs.js");
+const storiesDb = await import("../src/jira/stories.js");
+const addSession = db.prepare(
+  `INSERT INTO work_sessions (task_id, subtask_id, engineer, source, started_at, last_heartbeat_at, ended_at, end_reason)
+   VALUES (?, ?, ?, 'slack', ?, ?, ?, 'explicit')`,
+);
+const logTime = (taskId: number, subtaskId: number | null, engineer: string, spanMinutes: number, hoursAgo: number) => {
+  const start = new Date(Date.now() - hoursAgo * 3_600_000);
+  const end = new Date(start.getTime() + spanMinutes * 60_000);
+  addSession.run(taskId, subtaskId, engineer, start.toISOString(), start.toISOString(), end.toISOString());
+};
+
+for (let i = 0; i < 4; i++) logTime(request.id, null, "U_ENG", 25, 10 - i);
+const closedRequest = worklogs.closeUnit(request.id, null);
+check("four 25-minute sessions log once, as 2h — not four hours", closedRequest.slabSeconds, 7200);
+check("from 1h 40m of exact time", Math.round(closedRequest.exactSeconds / 60), 100);
+worklogs.closeUnit(request.id, null);
+check("closing again replaces the log instead of adding to it", worklogs.loggedSeconds(request.id), 7200);
+logTime(request.id, null, "U_OTHER", 27, 3);
+check("each engineer gets their own slab", worklogs.closeUnit(request.id, null).slabSeconds, 7200 + 3600);
+
+const subtaskFacts = {
+  jiraIssueId: "30001",
+  key: "ACME-2",
+  title: "API endpoint",
+  status: "In Progress",
+  bucket: "in_progress",
+  jiraAssignee: "a-sam",
+  assignee: null,
+  updatedAt: "2026-09-14T10:00:00.000+0000",
+};
+check("a new subtask is recorded", storiesDb.upsertSubtask(story.id, subtaskFacts), true);
+check("an unchanged subtask reports no change", storiesDb.upsertSubtask(story.id, subtaskFacts), false);
+check("a newly linked owner counts as a change", storiesDb.upsertSubtask(story.id, { ...subtaskFacts, assignee: "U_SAM" }), true);
+storiesDb.upsertSubtask(story.id, { ...subtaskFacts, jiraIssueId: "30002", key: "ACME-3", title: "Tests" });
+const endpoint = storiesDb.subtaskByKey(story.id, "acme-2");
+const tests = storiesDb.subtaskByKey(story.id, "ACME-3");
+check("subtasks are found by key in any case", endpoint?.jira_key, "ACME-2");
+
+logTime(story.id, endpoint!.id, "U_SAM", 125, 8);
+logTime(story.id, tests!.id, "U_SAM", 27, 5);
+check("a subtask of 2h 05m logs 2h", worklogs.closeUnit(story.id, endpoint!.id).slabSeconds, 7200);
+check("a subtask of 27m logs 1h", worklogs.closeUnit(story.id, tests!.id).slabSeconds, 3600);
+check("the story's total is the sum of its subtask slabs", worklogs.loggedSeconds(story.id), 10800);
+check("and each subtask keeps its own", worklogs.loggedForSubtask(endpoint!.id), 7200);
+check("a subtask that left the story is archived", storiesDb.archiveMissingSubtasks(story.id, ["30001"]), 1);
+check("and no longer listed", storiesDb.subtasksFor(story.id).map((subtask) => subtask.jira_key), ["ACME-2"]);
+
+console.log("\nsprints");
+storiesDb.upsertSprint(1, { id: 201, name: "Sprint 6", state: "active", startDate: "2026-09-08T00:00:00Z", endDate: "2026-09-22T00:00:00Z" });
+check("the running sprint is remembered", storiesDb.storedActiveSprint(1)?.jira_sprint_id, 201);
+db.prepare(`UPDATE tasks SET sprint_id = 201 WHERE id = ?`).run(story.id);
+check("its stories are live", storiesDb.liveStories(1).map((task) => task.id), [story.id]);
+db.prepare(`UPDATE tasks SET archived_at = ? WHERE id = ?`).run(new Date().toISOString(), story.id);
+check("archived stories drop out of the live list", storiesDb.liveStories(1).length, 0);
+check("and out of task lists", store.listTasks({ limit: 50 }).some((task) => task.id === story.id), false);
+check("but reports still see them", store.listTasks({ limit: 50, includeArchived: true }).some((task) => task.id === story.id), true);
+storiesDb.upsertSprint(1, { id: 201, name: "Sprint 6", state: "closed" });
+check("a closed sprint isn't the running one any more", storiesDb.storedActiveSprint(1), undefined);
+
+console.log("\nfrom jira to the board");
+const sync = await import("../src/jira/sync.js");
+check(
+  "rich-text descriptions become plain text",
+  sync.plainText({
+    type: "doc",
+    content: [
+      { type: "paragraph", content: [{ type: "text", text: "Hello" }, { type: "hardBreak" }, { type: "text", text: "world" }] },
+      { type: "paragraph", content: [{ type: "text", text: "Second" }] },
+    ],
+  }),
+  "Hello\nworld\nSecond\n",
+);
+check("a mapped status lands in its group", sync.bucketFor(1, { status: { id: "10003", name: "In Review" } }), "in_review");
+check(
+  "a flagged issue is blocked whatever its column",
+  sync.bucketFor(1, { status: { id: "10000", name: "To Do" }, flag: [{ value: "Impediment" }] }, "flag"),
+  "blocked",
+);
+check("an unflagged issue ignores the empty flag", sync.bucketFor(1, { status: { id: "10000", name: "To Do" }, flag: null }, "flag"), "todo");
+check("a status the board never mapped is guessed from its name", sync.bucketFor(1, { status: { id: "99999", name: "QA" } }), "in_review");
+
+console.log("\nsheets");
+const report = await import("../src/report.js");
+const sprintTab = report.currentSprintSheet();
+check("the current sprint tab rows match its header", sprintTab.rows.every((row) => row.length === sprintTab.header.length), true);
+const pastTab = report.pastSprintsSheet();
+check("an archived story appears under past sprints", pastTab.rows.map((row) => row[2]), ["ACME-323"]);
+check("with what it logged, in hours", pastTab.rows[0]?.[5], "3.00");
 
 // Windows keeps the file locked until the handle is closed, so close before cleanup.
 db.close();

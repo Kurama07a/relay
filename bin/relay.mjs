@@ -396,7 +396,7 @@ relay — claim and track client work without leaving your editor
   relay claim REL-7                            assign it to yourself
   relay start [REL-7]                          start the clock (infers the task)
   relay stop                                   pause the clock (task stays open)
-  relay done REL-7 [note]                      finish it; client hears the rounded time
+  relay done REL-7 [note]                      finish it; client hears the logged slab
   relay ask REL-7 <question>                   ask the client, in their thread
   relay note REL-7 <text>                      internal note
   relay block REL-7 <reason>                   mark blocked and stop the clock

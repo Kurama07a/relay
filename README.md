@@ -41,7 +41,7 @@ Jane: "checkout is broken,
                                         Sam: !done fixed the timeout
   └─ "✅ Done — fixed the
       timeout.
-      Sam · about 2 hours"
+      Sam · 2h"
 ```
 
 The client never leaves their thread. The team never leaves theirs.
@@ -92,7 +92,7 @@ Run these in the card's thread.
 |---|---|---|
 | `!start` | Starts the clock, claiming it if nobody has | 🔧 *Sam has started on this* — first time only |
 | `!pause` | Stops the clock; the task stays open | — nothing |
-| `!done [note]` | Marks finished | ✅ *Done — note. Sam · about 2 hours* |
+| `!done [note]` | Marks finished and logs the time as a slab | ✅ *Done — note. Sam · 2h* |
 | `!block <why>` | Marks blocked | ⏸️ *On hold — why* |
 | `!unblock` | Resumes | ▶️ *Back on this one* |
 | `!ask <question>` | Asks the client in their thread | ❓ *Sam asks…* |
@@ -126,7 +126,7 @@ relay tasks unclaimed            # what nobody has picked up
 relay show REL-7                 # request, full conversation, time so far
 relay claim REL-7                # assign to yourself — the client is told
 relay start                      # start the clock
-relay done REL-7 "fixed it"      # finish; the client hears the rounded time
+relay done REL-7 "fixed it"      # finish; the client hears the logged slab
 relay ask REL-7 "which browser?"
 ```
 
@@ -179,12 +179,64 @@ and picking it up on Thursday is two sessions on one open task.
 
 ### What the client sees
 
-Nothing about time until the task is done. Then a **rounded** figure — *"about
-2 hours"*, never *"2h 14m"*. Precise numbers invite a line-item argument about
-work that was already agreed.
+Nothing about time until the work is closed. Then a **slab** — *"2h"*, never
+*"1h 43m"*. Precise numbers invite a line-item argument about work that was
+already agreed.
 
-The team keeps the exact data: `!sessions` shows the per-session breakdown, who
-worked on it, and what the client would be told.
+| Exact time | Logged as |
+|---|---|
+| under 5 min | nothing |
+| 5–20 min | 30m |
+| 20 min – 1h 20m | 1h |
+| 1h 20m – 2h 20m | 2h |
+| … | +1h each time work runs 20 min past the hour |
+
+Slabs are fixed per engineer when work is closed, from its exact total across
+every session — four 25-minute sessions log as 2h, not 4h. Every threshold is a
+setting (`TIME_SLAB_*` in `.env.example`). The team keeps the exact data:
+`!sessions` shows the per-session breakdown and what has been logged.
+
+## Jira sprints
+
+Relay can follow the active sprint on a Jira Cloud board. It only ever reads
+from Jira — every request it makes is a GET — so stories are still moved,
+assigned and flagged in Jira, and Relay reflects them within a few minutes.
+
+**Setup.** Set `JIRA_URL`, `JIRA_EMAIL` and `JIRA_API_TOKEN`, then run
+`/relay setup` → **Connect Jira board**: pick a pairing, the board, and a sprint
+channel of its own. Check **Board columns** (which of five groups each column
+belongs to) and link people under **Jira members**. Guests can be linked too —
+client staff often own issues — and linking gives them nothing beyond their
+name on the board.
+
+**What appears.** No thread per story — a channel full of story threads is
+hard to search. Instead:
+
+- The sprint channel gets one pinned **Sprint desk**: counts per group, the
+  latest updates, and dropdowns to pick a story or a person. A story opens a
+  panel with where it is, its subtasks and its updates — never time. Anyone,
+  clients included, can add an update there, and the story's owner gets a DM.
+- The team channel gets a pinned **Team desk** with the same dropdowns, who's
+  working on what right now, totals, and a **Timesheet**. Its story panel has
+  **Start**, **Pause** and **Close** for each subtask, **Done story**, an
+  internal note, a time correction, and an update for the client.
+  `/relay story ACME-12` opens it too.
+- Every story in the sprint gets a ledger row and appears in the sheet's
+  **Current sprint** tab.
+
+Updates stay inside the panels, so the channels stay quiet. When the team posts
+an update, clients who have written on that story get a DM. Desks are pinned and
+bookmarked when the app has `pins:write` and `bookmarks:write`; without them
+they're still posted.
+
+Owner, status and type come from Jira. A story only counts as done in the ledger
+when someone presses **Done story** (or runs `relay done`); moving it to Done in
+Jira closes nothing.
+
+**Sprint end.** Stories Jira moves into the next sprint carry over with their
+updates and time. The rest are archived: they leave the desks and task lists
+and move to the sheet's **Past sprints** tab. Nothing is deleted.
+`/relay jira sync` checks Jira straight away.
 
 ## Setup, from inside Slack
 

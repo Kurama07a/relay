@@ -25,9 +25,13 @@ export let teamId = "";
 /** Workspace name, used to title things people will see outside Slack. */
 export let teamName = "";
 
+/** e.g. `https://yourteam.slack.com/`, for building links to messages. */
+export let teamUrl = "";
+
 export async function resolveBotIdentity(): Promise<void> {
   const auth = await client.auth.test();
   botUserId = (auth.user_id as string) ?? "";
   teamId = (auth.team_id as string) ?? "";
   teamName = (auth.team as string) ?? "";
+  teamUrl = (auth.url as string) ?? "";
 }

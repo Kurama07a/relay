@@ -54,6 +54,12 @@ async function onReactionAdded(event: ReactionEvent): Promise<void> {
     return;
   }
 
+  // Sprint stories are assigned in Jira, so a reaction on their card claims nothing.
+  if (task.source === "jira") {
+    log.debug(`:${reaction}: on story ${task.jira_key} ignored — its owner comes from Jira`);
+    return;
+  }
+
   const isClaim = matches(config.emoji.claim, reaction);
   const isDismiss = matches(config.emoji.dismiss, reaction);
 
@@ -121,7 +127,7 @@ async function onReactionRemoved(event: ReactionEvent): Promise<void> {
   if (!matches(config.emoji.claim, event.reaction)) return;
 
   const task = getByInternalMessage(event.item.channel, event.item.ts);
-  if (!task || task.assignee !== event.user) return;
+  if (!task || task.source === "jira" || task.assignee !== event.user) return;
 
   if (task.status !== "open") {
     await postEphemeral(

@@ -1,4 +1,5 @@
 import type { TaskKind, TaskStatus } from "../store.js";
+import type { Bucket } from "../jira/buckets.js";
 
 /**
  * The visual language, in one place.
@@ -24,6 +25,18 @@ export const STATUS: Record<
   blocked: { icon: "⛔", label: "Blocked", color: "#E5484D" },
   done: { icon: "✅", label: "Done", color: "#30A46C" },
   dismissed: { icon: "🗑️", label: "Dismissed", color: "#8B8D98" },
+};
+
+/**
+ * The five sprint board groups, in the same palette as the task stripes so a
+ * story looks the same on its card, its board tab and the sheet.
+ */
+export const BUCKET_STYLE: Record<Bucket, { icon: string; label: string; color: string }> = {
+  todo: { icon: "📝", label: "To do", color: "#5B8DEF" },
+  in_progress: { icon: "🔧", label: "In progress", color: "#22B8CF" },
+  in_review: { icon: "🧐", label: "In review", color: "#6E56CF" },
+  blocked: { icon: "⛔", label: "Blocked", color: "#E5484D" },
+  done: { icon: "✅", label: "Done", color: "#30A46C" },
 };
 
 export const KIND: Record<TaskKind, { icon: string; label: string }> = {
@@ -55,6 +68,9 @@ export const ICON = {
   warning: "⚠️",
   dismissed: "🗑️",
   greeting: "👋",
+  archived: "🗄️",
+  carried: "↪️",
+  sync: "🔄",
 } as const;
 
 export function statusLabel(status: TaskStatus): string {
@@ -91,4 +107,16 @@ export function headerText(text: string, max = 150): string {
 export function when(iso: string): string {
   const epoch = Math.floor(new Date(iso).getTime() / 1000);
   return `<!date^${epoch}^{date_short_pretty} at {time}|${iso}>`;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** `8 Sep – 22 Sep` from Jira's ISO dates, or empty when there are none. */
+export function dateRange(start?: string | null, end?: string | null): string {
+  const short = (iso?: string | null) => {
+    if (!iso) return "?";
+    const date = new Date(iso);
+    return `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}`;
+  };
+  return start || end ? `${short(start)} – ${short(end)}` : "";
 }

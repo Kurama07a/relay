@@ -207,6 +207,20 @@ export async function activeSprint(boardId: number): Promise<JiraSprint | null> 
   return sprint ?? null;
 }
 
+export async function sprintById(sprintId: number): Promise<JiraSprint> {
+  return get(`/rest/agile/1.0/sprint/${sprintId}`);
+}
+
+/** One issue, or null if it has been deleted or hidden from this account. */
+export async function issueById(issueId: string, fields: string[]): Promise<JiraIssue | null> {
+  try {
+    return await get<JiraIssue>(`/rest/api/3/issue/${encodeURIComponent(issueId)}`, { fields: fields.join(",") });
+  } catch (error) {
+    if (error instanceof JiraError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 /**
  * Everyone who can be assigned issues in a project. Jira filters this list by
  * permission after paging, so a short page doesn't always mean the last one —

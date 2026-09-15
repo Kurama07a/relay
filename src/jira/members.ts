@@ -87,7 +87,8 @@ export function memberForSlackUser(slackUser: string): JiraMember | undefined {
     | undefined;
 }
 
-function displayName(accountId: string): string {
+/** A Jira member's name as Jira shows it, falling back to the account id. */
+export function displayName(accountId: string): string {
   const row = db
     .prepare(`SELECT display_name FROM jira_members WHERE jira_account_id = ?`)
     .get(accountId) as { display_name: string } | undefined;
@@ -116,11 +117,6 @@ export function linkProblems(
       problems[choice.accountId] = "That's an app, not a person.";
       continue;
     }
-    if (person?.isGuest) {
-      problems[choice.accountId] = "That's a guest account. Only team members can be linked to Jira.";
-      continue;
-    }
-
     const earlier = taken.get(choice.slackUser);
     if (earlier) {
       problems[choice.accountId] = `Already chosen for ${earlier}. Each Slack member can be linked once.`;
@@ -190,25 +186,35 @@ export function normalizeName(name: string): string {
 
 /**
  * Likely Slack accounts for unlinked Jira members. Email first, because it's
- * unambiguous; then an exact full-name match, but only when exactly one team
- * member has that name. Guests, apps, deactivated accounts and anyone already
- * linked are never suggested.
+ * unambiguous; then an exact full-name match, but only when exactly one person
+ * has that name — looking at the team before guests, so a client who shares a
+ * name with an engineer doesn't get picked. Apps, deactivated accounts and
+ * anyone already linked are never suggested.
+ *
+ * Guests can be linked: client staff often have Jira accounts and stories of
+ * their own. Linking gives them nothing in Relay beyond their name on the board.
  */
 export function suggestLinks(members: JiraMember[], people: SlackPerson[]): Map<string, Suggestion> {
   const linked = new Set(members.map((member) => member.slack_user).filter(Boolean));
-  const available = people.filter(
-    (person) => !person.isBot && !person.isGuest && !person.deleted && !linked.has(person.id),
-  );
+  const eligible = people.filter((person) => !person.isBot && !person.deleted && !linked.has(person.id));
+  const pools = [eligible.filter((person) => !person.isGuest), eligible.filter((person) => person.isGuest)];
   const unlinked = members.filter((member) => !member.slack_user);
   const suggestions = new Map<string, Suggestion>();
   const claimed = new Set<string>();
 
-  const only = (matches: SlackPerson[]) => (matches.length === 1 ? matches[0] : undefined);
+  /** The single person matching, trying the team first and guests second. */
+  const only = (test: (person: SlackPerson) => boolean) => {
+    for (const pool of pools) {
+      const matches = pool.filter(test);
+      if (matches.length > 0) return matches.length === 1 ? matches[0] : undefined;
+    }
+    return undefined;
+  };
 
   for (const member of unlinked) {
     const email = member.email?.toLowerCase();
     if (!email) continue;
-    const match = only(available.filter((person) => person.email?.toLowerCase() === email));
+    const match = only((person) => person.email?.toLowerCase() === email);
     if (match && !claimed.has(match.id)) {
       suggestions.set(member.jira_account_id, { slackUser: match.id, via: "email" });
       claimed.add(match.id);
@@ -219,9 +225,7 @@ export function suggestLinks(members: JiraMember[], people: SlackPerson[]): Map<
     if (suggestions.has(member.jira_account_id)) continue;
     const name = normalizeName(member.display_name);
     if (!name) continue;
-    const match = only(
-      available.filter((person) => person.names.some((candidate) => normalizeName(candidate) === name)),
-    );
+    const match = only((person) => person.names.some((candidate) => normalizeName(candidate) === name));
     if (match && !claimed.has(match.id)) {
       suggestions.set(member.jira_account_id, { slackUser: match.id, via: "name" });
       claimed.add(match.id);

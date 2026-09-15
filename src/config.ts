@@ -112,6 +112,21 @@ export const config = {
     hoursPerDay: number("HOURS_PER_DAY", 6),
   },
 
+  /**
+   * Time slabs — what closed work is logged as (see slabs.ts). These are
+   * business rules, so they're settings rather than code.
+   */
+  slabs: {
+    /** Under this many minutes logs nothing: an accidental start. */
+    floorMinutes: number("TIME_SLAB_FLOOR_MINUTES", 5),
+    /** Under this many minutes logs as half an hour. */
+    halfHourUnderMinutes: number("TIME_SLAB_HALF_HOUR_UNDER_MINUTES", 20),
+    /** How far past an hour work can run before it counts as the next hour. */
+    graceMinutes: number("TIME_SLAB_GRACE_MINUTES", 20),
+    /** A single unit of work past this many hours gets a suggestion to split it. */
+    splitWarningHours: number("TIME_SPLIT_WARNING_HOURS", 12),
+  },
+
   api: {
     enabled: optional("API_ENABLED", "true") !== "false",
     port: number("API_PORT", 3737),

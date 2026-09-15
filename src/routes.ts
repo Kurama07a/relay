@@ -54,6 +54,11 @@ export function isTeamChannel(channel: string): boolean {
   return load().some((route) => route.team_channel === channel);
 }
 
+/** The pairing whose Jira stories are threaded in this channel, if any. */
+export function routeForSprintChannel(channel: string): Route | undefined {
+  return load().find((route) => route.sprint_channel === channel);
+}
+
 /** Every channel the bot needs to be a member of. */
 export function watchedChannels(): string[] {
   const channels = new Set<string>();

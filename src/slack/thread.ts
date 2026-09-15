@@ -28,12 +28,13 @@ import {
   adjustSession,
   effortFor,
   formatExact,
-  formatRounded,
   openSessionFor,
   sessionsFor,
   sessionSeconds,
 } from "../sessions.js";
 import { finishWork, startWork, stopWork } from "./work.js";
+import { formatSlab } from "../slabs.js";
+import { loggedSeconds } from "../worklogs.js";
 
 const KINDS: TaskKind[] = ["bug", "feature", "review", "question", "request"];
 
@@ -337,7 +338,7 @@ function sessionBreakdown(task: Task): string {
     ...lines,
     "",
     `*Total:* ${formatExact(effort.totalSeconds)} across ${effort.sessionCount} session${effort.sessionCount === 1 ? "" : "s"}`,
-    `_On completion the client would be told "${formatRounded(effort.totalSeconds)}"._`,
+    `_Logged so far: *${formatSlab(loggedSeconds(task.id))}* — time is fixed into slabs when work is closed._`,
   ].join("\n");
 }
 
@@ -349,6 +350,7 @@ function sessionBreakdown(task: Task): string {
 function timeHelpText(): string {
   const p = config.commandPrefix;
   const { staleAfterMinutes, maxHours } = config.sessions;
+  const { floorMinutes, halfHourUnderMinutes, graceMinutes } = config.slabs;
   return [
     "*How Relay records time*",
     "",
@@ -370,8 +372,10 @@ function timeHelpText(): string {
     `• You need a *running* session on this task to adjust it. If you already closed it: \`${p}start\`, then \`${p}time +N <why>\`, then \`${p}pause\`/\`${p}done\`.`,
     `• Use it when you worked before running \`${p}start\`, left a session running over a break, or an editor session auto-closed early.`,
     "",
-    "*What the client sees*",
-    `• Never the exact figure. On \`${p}done\` they are told a rounded range — "about 2 hours", "under 15 minutes". The precise total stays in this channel and the ledger.`,
+    "*What gets logged*",
+    `• Closing work fixes it into a slab from its exact total: under ${floorMinutes} min logs nothing, under ${halfHourUnderMinutes} min is 30m, then whole hours — moving up once you're ${graceMinutes} min past the hour.`,
+    "• On a sprint story, each subtask is logged when it's closed from the team desk, and the story's total is their sum.",
+    "• The client only ever sees the slab. The exact total stays in this channel and the ledger.",
   ].join("\n");
 }
 

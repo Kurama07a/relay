@@ -494,7 +494,11 @@ check("effort hours column is numeric text", /^(\d+\.\d{2})?$/.test(tasksTab.row
 check("body newlines are flattened into one cell", tasksTab.rows.every((row) => !(row[16] ?? "").includes("\n")), true);
 
 const allTabs = report.allSheets();
-check("four tabs exported", allTabs.map((tab) => tab.name), ["Summary", "Tasks", "Sessions", "Activity"]);
+check(
+  "six tabs exported",
+  allTabs.map((tab) => tab.name),
+  ["Summary", "Tasks", "Sessions", "Activity", "Current sprint", "Past sprints"],
+);
 check("every tab has a header", allTabs.every((tab) => tab.header.length > 0), true);
 check(
   "sessions tab rows match its header",

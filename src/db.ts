@@ -27,7 +27,7 @@ function addColumn(table: string, column: string, definition: string): void {
  * copied before it's upgraded, so a migration that goes wrong never costs the
  * data — and the deploy doesn't depend on anyone remembering to take a backup.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /**
  * Copies an existing ledger to `relay.db.before-v<N>` beside it, once per
@@ -236,10 +236,12 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   addColumn("tasks", "jira_issue_id", "TEXT");
   addColumn("tasks", "jira_key", "TEXT");
   addColumn("tasks", "jira_status", "TEXT");
+  addColumn("tasks", "jira_assignee", "TEXT");
   addColumn("tasks", "bucket", "TEXT");
   addColumn("tasks", "jira_updated_at", "TEXT");
   addColumn("tasks", "sprint_id", "INTEGER");
   addColumn("tasks", "carried_count", "INTEGER NOT NULL DEFAULT 0");
+  addColumn("tasks", "carried_from_sprint_id", "INTEGER");
   addColumn("tasks", "archived_at", "TEXT");
 
   db.exec(`

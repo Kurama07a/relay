@@ -14,13 +14,14 @@ import {
   adjustSession,
   effortFor,
   formatExact,
-  formatRounded,
   heartbeat,
   openSessionFor,
   sessionsFor,
   sessionSeconds,
 } from "./sessions.js";
 import { finishWork, reopenWork, startWork, stopWork } from "./slack/work.js";
+import { formatSlab } from "./slabs.js";
+import { loggedSeconds } from "./worklogs.js";
 import type { SessionSource } from "./sessions.js";
 import { assign, postToClient, postToInternal, transition } from "./slack/actions.js";
 import { notices } from "./slack/notices.js";
@@ -127,7 +128,7 @@ function serialize(task: Task) {
     effort: {
       seconds: effort.totalSeconds,
       exact: formatExact(effort.totalSeconds),
-      rounded: formatRounded(effort.totalSeconds),
+      logged: formatSlab(loggedSeconds(task.id)),
       sessions: effort.sessionCount,
       active: effort.active,
       lastActivityAt: effort.lastActivityAt,
@@ -371,7 +372,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
       const result = await finishWork(task, engineer, body.note as string | undefined);
       return {
         ...serialize(result.task),
-        toldClient: formatRounded(result.effortSeconds),
+        toldClient: formatSlab(result.loggedSeconds),
       };
     },
   },

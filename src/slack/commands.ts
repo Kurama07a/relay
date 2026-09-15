@@ -2,6 +2,8 @@ import type { KnownBlock } from "@slack/types";
 import { app, teamId } from "./app.js";
 import { announce, configBlocks, postingProblem, sheetError } from "./admin.js";
 import { jiraBlocks, jiraCommand } from "./jira-admin.js";
+import { openTeamPanel } from "./panels.js";
+import { storyByKey } from "../jira/stories.js";
 import {
   adminChannels,
   adminUsers,
@@ -57,6 +59,24 @@ export function registerCommands(): void {
   app.command("/relay", async ({ command, ack, respond }) => {
     await ack();
     try {
+      // `/relay story ACME-12` opens a panel, which needs this command's trigger.
+      const [verb = "", key = ""] = command.text.trim().split(/\s+/);
+      if (verb.toLowerCase() === "story") {
+        const decision = await canSeeTasks(command.user_id);
+        const task = key ? storyByKey(key) : undefined;
+        if (!decision.ok) {
+          await respond({ response_type: "ephemeral", text: `${ICON.warning} ${decision.reason}` });
+        } else if (!task) {
+          await respond({
+            response_type: "ephemeral",
+            text: key ? `No sprint story ${key}.` : "Usage: `/relay story ACME-12`",
+          });
+        } else {
+          await openTeamPanel(command.trigger_id, task, command.user_id);
+        }
+        return;
+      }
+
       const result = await run(command.text.trim(), command.user_id, command.channel_id);
       await respond(
         typeof result === "string"
@@ -378,6 +398,7 @@ async function run(
       return [
         "*Tasks*",
         "`/relay` — open tasks · `mine` · `all` · `done` · `stats` · `REL-12`",
+        "`/relay story ACME-12` — open a sprint story's team panel",
         "",
         "*Setup*",
         "`/relay setup` — channel pairings and the spreadsheet, with buttons",
@@ -386,7 +407,7 @@ async function run(
         "`/relay sheet <url>` — connect a Google Sheet · `sync` · `off`",
         "`/relay backfill` — resolve any user or channel IDs into names",
         "`/relay control #channel` — where config changes get announced",
-        "`/relay jira` — Jira connection, sprint and member links · `unlink @someone`",
+        "`/relay jira` — Jira connection, sprint and member links · `sync` · `unlink @someone`",
       ].join("\n");
 
     default: {

@@ -28,6 +28,23 @@ export interface Task {
   claimed_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+
+  /** `slack` for a request relayed from a client channel, `jira` for a sprint story. */
+  source: "slack" | "jira";
+  jira_issue_id: string | null;
+  jira_key: string | null;
+  /** Jira's own status name, as the board shows it. */
+  jira_status: string | null;
+  /** The Jira account the story is assigned to; `assignee` is its linked Slack member. */
+  jira_assignee: string | null;
+  /** Which of the five board groups the story is in, from the column mapping. */
+  bucket: string | null;
+  jira_updated_at: string | null;
+  sprint_id: number | null;
+  carried_count: number;
+  carried_from_sprint_id: number | null;
+  /** Set when a story leaves the sprint. Hidden from lists, never deleted. */
+  archived_at: string | null;
 }
 
 export interface NewTask {
@@ -111,9 +128,17 @@ export function updateTask(id: number, fields: Partial<Task>): Task {
   return getTask(id)!;
 }
 
-export function listTasks(options: { status?: TaskStatus[]; assignee?: string; limit?: number }): Task[] {
+export function listTasks(options: {
+  status?: TaskStatus[];
+  assignee?: string;
+  limit?: number;
+  /** Stories from ended sprints are left out unless asked for — reports want them, lists don't. */
+  includeArchived?: boolean;
+}): Task[] {
   const clauses: string[] = [];
   const params: Record<string, unknown> = {};
+
+  if (!options.includeArchived) clauses.push(`archived_at IS NULL`);
 
   if (options.status?.length) {
     // Statuses are a closed union, but bind them anyway rather than interpolating.

@@ -96,8 +96,8 @@ The note goes to the client verbatim, so write it for them, not the team:
 "Fixed the timeout on CSV export" rather than "bumped proxy_read_timeout".
 Internal detail belongs in `relay note`.
 
-The client is told a rounded duration ("about 3 hours"). Never quote precise
-figures to the client in anything you draft.
+The client is told the logged slab ("3h"), fixed from the exact time when the
+work is closed. Never quote precise figures to the client in anything you draft.
 
 ## Blocked
 
@@ -117,7 +117,7 @@ phrase it as something they can act on.
 | `relay claim REL-7` | assign to yourself |
 | `relay start [REL-7]` | start the clock, inferring the task if omitted |
 | `relay stop` | pause; the task stays open |
-| `relay done REL-7 [note]` | finish; the client hears the rounded time |
+| `relay done REL-7 [note]` | finish; the client hears the logged slab |
 | `relay ask REL-7 <question>` | ask the client, in their thread |
 | `relay reply REL-7 <message>` | update the client without a question |
 | `relay note REL-7 <text>` | internal note |

@@ -135,7 +135,7 @@ console.log("\nfinishing");
 const done = await api("POST", "/tasks/REL-1/done", { note: "fixed the timeout" });
 check("done succeeds", done.status, 200);
 check("done sets the status", done.json.status, "done");
-check("the client is given a rounded figure", done.json.toldClient, "about 45 minutes");
+check("the client is told the logged slab", done.json.toldClient, "1h");
 check("the exact figure is kept internally", done.json.effort.exact, "45m");
 check("finishing closes the running session", done.json.effort.active, false);
 

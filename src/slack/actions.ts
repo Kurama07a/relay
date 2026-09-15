@@ -6,9 +6,29 @@ import { ICON } from "./design.js";
 import { addEvent, ref, updateTask, type Task, type TaskStatus } from "../store.js";
 import { log } from "../log.js";
 
+/**
+ * Sprint stories have no cards or threads — they live in the desk panels — so
+ * anything that would post to one is recorded for the panel's feed instead,
+ * and whoever renders the desks is told something changed.
+ */
+const storyListeners: Array<(task: Task) => void> = [];
+
+export function onStoryActivity(listener: (task: Task) => void): void {
+  storyListeners.push(listener);
+}
+
+function storyActivity(task: Task): void {
+  for (const listener of storyListeners) listener(task);
+}
+
 /** Posts into the client's original message thread. */
 export async function postToClient(task: Task, notice: Notice | string): Promise<void> {
   const payload = typeof notice === "string" ? plain(notice) : notice;
+  if (task.source === "jira") {
+    addEvent(task.id, "client_notice", null, payload.text);
+    storyActivity(task);
+    return;
+  }
   await client.chat.postMessage({
     channel: task.client_channel,
     thread_ts: task.client_ts,
@@ -27,6 +47,11 @@ export async function postToClient(task: Task, notice: Notice | string): Promise
  * delivery is the whole point and a failure must surface.
  */
 export async function postToInternal(task: Task, text: string): Promise<void> {
+  if (task.source === "jira") {
+    addEvent(task.id, "internal", null, text);
+    storyActivity(task);
+    return;
+  }
   try {
     await client.chat.postMessage({
       channel: task.internal_channel,
@@ -55,6 +80,12 @@ export async function postEphemeral(
 
 /** Re-renders the relayed message so its status/assignee fields stay current. */
 export async function refreshInternalMessage(task: Task): Promise<void> {
+  // A sprint story is shown on the desks, which re-render on their own schedule.
+  if (task.source === "jira") {
+    storyActivity(task);
+    return;
+  }
+
   const ctx = {
     clientName: await userName(task.client_user),
     channelLabel: await channelName(task.client_channel),
