@@ -491,6 +491,28 @@ check("and each subtask keeps its own", worklogs.loggedForSubtask(endpoint!.id),
 check("a subtask that left the story is archived", storiesDb.archiveMissingSubtasks(story.id, ["30001"]), 1);
 check("and no longer listed", storiesDb.subtasksFor(story.id).map((subtask) => subtask.jira_key), ["ACME-2"]);
 
+console.log("\nlogging time after the fact");
+const sessionsModule = await import("../src/sessions.js");
+check("1h 30m", sessionsModule.parseDuration("1h 30m"), 5400);
+check("1.5h", sessionsModule.parseDuration("1.5h"), 5400);
+check("90m", sessionsModule.parseDuration("90m"), 5400);
+check("1:30", sessionsModule.parseDuration("1:30"), 5400);
+check("a bare number is minutes", sessionsModule.parseDuration("45"), 2700);
+check("words are fine", sessionsModule.parseDuration("2 hours 15 mins"), 8100);
+check("nonsense is refused", sessionsModule.parseDuration("soon"), null);
+check("an empty field is refused", sessionsModule.parseDuration("  "), null);
+
+const manual = sessionsModule.logManualSession(request.id, null, "U_LATE", 45 * 60, new Date(), "pairing session");
+check("logged time is a closed manual session", [manual.source, Boolean(manual.ended_at)], ["manual", true]);
+check("it counts its full length", sessionsModule.sessionSeconds(manual), 2700);
+check("and keeps what was done", manual.note, "pairing session");
+check(
+  "it's slabbed like clocked time when the work is closed",
+  worklogs.closeUnit(request.id, null).engineers.find((entry) => entry.engineer === "U_LATE")?.slabSeconds,
+  3600,
+);
+check("it doesn't hold anyone's clock open", sessionsModule.openSessionFor("U_LATE"), undefined);
+
 console.log("\nsprints");
 storiesDb.upsertSprint(1, { id: 201, name: "Sprint 6", state: "active", startDate: "2026-09-08T00:00:00Z", endDate: "2026-09-22T00:00:00Z" });
 check("the running sprint is remembered", storiesDb.storedActiveSprint(1)?.jira_sprint_id, 201);

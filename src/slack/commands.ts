@@ -2,7 +2,7 @@ import type { KnownBlock } from "@slack/types";
 import { app, teamId } from "./app.js";
 import { announce, configBlocks, postingProblem, sheetError } from "./admin.js";
 import { jiraBlocks, jiraCommand } from "./jira-admin.js";
-import { openTeamPanel } from "./panels.js";
+import { openLogTime } from "./panels.js";
 import { storyByKey } from "../jira/stories.js";
 import {
   adminChannels,
@@ -72,7 +72,7 @@ export function registerCommands(): void {
             text: key ? `No sprint story ${key}.` : "Usage: `/relay story ACME-12`",
           });
         } else {
-          await openTeamPanel(command.trigger_id, task, command.user_id);
+          await openLogTime(command.trigger_id, task, command.user_id);
         }
         return;
       }
@@ -398,7 +398,7 @@ async function run(
       return [
         "*Tasks*",
         "`/relay` — open tasks · `mine` · `all` · `done` · `stats` · `REL-12`",
-        "`/relay story ACME-12` — open a sprint story's team panel",
+        "`/relay story ACME-12` — log time on a sprint story",
         "",
         "*Setup*",
         "`/relay setup` — channel pairings and the spreadsheet, with buttons",

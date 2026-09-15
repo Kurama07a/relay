@@ -1,7 +1,8 @@
 import { db } from "./db.js";
 import { config } from "./config.js";
 
-export type SessionSource = "claude-code" | "codex" | "cli" | "slack";
+/** `manual` is time logged after the fact rather than clocked. */
+export type SessionSource = "claude-code" | "codex" | "cli" | "slack" | "manual";
 export type EndReason = "explicit" | "reaped" | "superseded" | "archived";
 
 export interface WorkSession {
@@ -154,6 +155,50 @@ export function adjustSession(sessionId: number, deltaMinutes: number, note?: st
   ).run(adjustment, note ?? null, sessionId);
 
   return Math.max(0, measured + adjustment);
+}
+
+/**
+ * Reads a duration the way people type one: `1h 30m`, `1.5h`, `90m`, `1:30`,
+ * or a bare number of minutes. Returns seconds, or null if it isn't a duration.
+ */
+export function parseDuration(input: string): number | null {
+  const text = input.trim().toLowerCase().replace(/\s+/g, "");
+  if (!text) return null;
+
+  const clock = /^(\d+):(\d{1,2})$/.exec(text);
+  if (clock) return Number(clock[1]) * 3600 + Number(clock[2]) * 60;
+
+  if (/^\d+$/.test(text)) return Number(text) * 60;
+
+  const units = /^(?:(\d+(?:\.\d+)?)h(?:ours?|rs?)?)?(?:(\d+)m(?:in(?:ute)?s?)?)?$/.exec(text);
+  if (units && (units[1] || units[2])) {
+    return Math.round(Number(units[1] ?? 0) * 3600 + Number(units[2] ?? 0) * 60);
+  }
+  return null;
+}
+
+/**
+ * Records time worked without the clock — "an hour and a half on this
+ * yesterday". It's stored as a closed session ending at `endedAt`, so totals,
+ * slabs and reports treat it exactly like clocked time.
+ */
+export function logManualSession(
+  taskId: number,
+  subtaskId: number | null,
+  engineer: string,
+  seconds: number,
+  endedAt: Date,
+  note?: string,
+): WorkSession {
+  const end = endedAt.toISOString();
+  const start = new Date(endedAt.getTime() - seconds * 1000).toISOString();
+  const result = db
+    .prepare(
+      `INSERT INTO work_sessions (task_id, subtask_id, engineer, source, started_at, last_heartbeat_at, ended_at, end_reason, note)
+       VALUES (?, ?, ?, 'manual', ?, ?, ?, 'explicit', ?)`,
+    )
+    .run(taskId, subtaskId, engineer, start, end, end, note ?? null);
+  return getSession(Number(result.lastInsertRowid))!;
 }
 
 /** Elapsed seconds for one session, counting an open one up to right now. */

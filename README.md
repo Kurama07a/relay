@@ -216,11 +216,13 @@ hard to search. Instead:
   latest updates, and dropdowns to pick a story or a person. A story opens a
   panel with where it is, its subtasks and its updates — never time. Anyone,
   clients included, can add an update there, and the story's owner gets a DM.
-- The team channel gets a pinned **Team desk** with the same dropdowns, who's
-  working on what right now, totals, and a **Timesheet**. Its story panel has
-  **Start**, **Pause** and **Close** for each subtask, **Done story**, an
-  internal note, a time correction, and an update for the client.
-  `/relay story ACME-12` opens it too.
+- The team channel gets a pinned **Team desk**: who's working on what right
+  now, totals, and two buttons. **View time** shows the sprint's time, or one
+  story's breakdown by subtask and person. **Log time** records time after the
+  fact ("1h 30m on ACME-12 yesterday"), starts or pauses the clock, and closes
+  subtasks and stories. Both narrow down to one person's stories first.
+  `/relay story ACME-12` opens Log time on that story. Updates for the client
+  go through the Sprint desk.
 - Every story in the sprint gets a ledger row and appears in the sheet's
   **Current sprint** tab.
 
