@@ -13,14 +13,15 @@ import { listRoutes, type Route } from "../routes.js";
 import { finishSubtask, finishWork, startWork, stopWork } from "./work.js";
 import {
   DESK,
-  clientStoryView,
-  personView,
+  EVERYONE,
+  boardView,
   refreshDesksFor,
-  routeForDeskChannel,
   routeForStory,
-  storyOptions,
+  storiesFor,
+  storyView,
+  type StoryState,
 } from "./desk.js";
-import { EVERYONE, freshNonce, initialTimeState, storiesFor, timeView, type TimeMode, type TimeState } from "./time.js";
+import { freshNonce, initialTimeState, timeView, type TimeMode, type TimeState } from "./time.js";
 
 /**
  * Everything the desks' dropdowns, buttons and panels do.
@@ -52,10 +53,6 @@ const payloadOf = (body: unknown) => body as Payload;
 function actionValue(payload: Payload): string {
   const action = payload.actions?.[0];
   return action?.selected_option?.value ?? action?.value ?? "";
-}
-
-function channelOf(payload: Payload): string {
-  return payload.channel?.id ?? payload.container?.channel_id ?? "";
 }
 
 /** A sprint story from a dropdown or button value. */
@@ -176,19 +173,66 @@ export async function openLogTime(triggerId: string, task: Task, viewer: string)
 export function registerDesks(): void {
   // ---- the Sprint desk: anyone in the channel --------------------------------
 
-  app.options(DESK.story, async ({ ack, body }) => {
-    const payload = body as Payload & { value?: string };
-    const route = routeForDeskChannel(channelOf(payload));
-    const response = route ? storyOptions(route, payload.value ?? "") : { options: [] };
-    await ack(response as Parameters<typeof ack>[0]);
-  });
+  const storyStateOf = (payload: Payload): { state: StoryState; route: Route } | null => {
+    const state = JSON.parse(payload.view?.private_metadata || "{}") as StoryState;
+    const route = listRoutes().find((candidate) => candidate.id === state.routeId);
+    return route ? { state, route } : null;
+  };
 
-  app.action(DESK.story, async ({ ack, body }) => {
+  const replaceView = async (payload: Payload, view: View) => {
+    if (payload.view?.id) await client.views.update({ view_id: payload.view.id, view });
+  };
+
+  const routeFromButton = (payload: Payload) =>
+    listRoutes().find((candidate) => String(candidate.id) === actionValue(payload));
+
+  app.action(DESK.openStory, async ({ ack, body }) => {
     await ack();
     const payload = payloadOf(body);
-    await safely("open story", async () => {
-      const task = storyFrom(actionValue(payload));
-      if (task) await openView(payload.trigger_id, await clientStoryView(task));
+    await safely("open stories", async () => {
+      const route = routeFromButton(payload);
+      if (route) await openView(payload.trigger_id, await storyView(route, { routeId: route.id, person: null, taskId: null }));
+    });
+  });
+
+  app.action(DESK.openBoard, async ({ ack, body }) => {
+    await ack();
+    const payload = payloadOf(body);
+    await safely("open boards", async () => {
+      const route = routeFromButton(payload);
+      if (route) await openView(payload.trigger_id, await boardView(route, null));
+    });
+  });
+
+  app.action(DESK.storyPickPerson, async ({ ack, body }) => {
+    await ack();
+    const payload = payloadOf(body);
+    await safely("narrow stories to a person", async () => {
+      const current = storyStateOf(payload);
+      if (!current) return;
+      const value = actionValue(payload);
+      const person = value === EVERYONE ? null : value;
+      const keep = current.state.taskId && storiesFor(current.route, person).some((story) => story.id === current.state.taskId);
+      await replaceView(payload, await storyView(current.route, { ...current.state, person, taskId: keep ? current.state.taskId : null }));
+    });
+  });
+
+  app.action(DESK.storyPickStory, async ({ ack, body }) => {
+    await ack();
+    const payload = payloadOf(body);
+    await safely("pick a story", async () => {
+      const current = storyStateOf(payload);
+      if (!current) return;
+      await replaceView(payload, await storyView(current.route, { ...current.state, taskId: Number(actionValue(payload)) || null }));
+    });
+  });
+
+  app.action(DESK.boardPickPerson, async ({ ack, body }) => {
+    await ack();
+    const payload = payloadOf(body);
+    await safely("pick a board", async () => {
+      const current = storyStateOf(payload);
+      if (current) await replaceView(payload, await boardView(current.route, actionValue(payload) || null));
     });
   });
 
@@ -197,27 +241,22 @@ export function registerDesks(): void {
     const payload = payloadOf(body);
     await safely("open story from a DM", async () => {
       const task = storyFrom(actionValue(payload));
-      if (task) await openView(payload.trigger_id, await clientStoryView(task));
-    });
-  });
-
-  app.action(DESK.person, async ({ ack, body }) => {
-    await ack();
-    const payload = payloadOf(body);
-    await safely("open person", async () => {
-      const route = routeForDeskChannel(channelOf(payload));
-      if (route) await openView(payload.trigger_id, await personView(route, actionValue(payload)));
+      const route = task ? routeForStory(task) : undefined;
+      if (task && route) {
+        await openView(payload.trigger_id, await storyView(route, { routeId: route.id, person: null, taskId: task.id }));
+      }
     });
   });
 
   app.view(DESK.clientPanel, async ({ ack, body, view }) => {
     const user = body.user.id;
-    const { taskId } = JSON.parse(view.private_metadata) as { taskId: number };
-    const task = getTask(taskId);
+    const state = JSON.parse(view.private_metadata) as StoryState;
+    const route = listRoutes().find((candidate) => candidate.id === state.routeId);
+    const task = state.taskId ? getTask(state.taskId) : undefined;
     const entry = Object.entries(view.state.values).find(([blockId]) => blockId.startsWith("update_"));
     const text = entry?.[1]?.value?.value?.trim() ?? "";
 
-    if (!task || task.source !== "jira" || task.archived_at) {
+    if (!route || !task || task.source !== "jira" || task.archived_at) {
       await ack();
       return;
     }
@@ -231,7 +270,7 @@ export function registerDesks(): void {
     refreshDesksFor(task);
     await ack({
       response_action: "update",
-      view: await clientStoryView(task, `${ICON.done} Sent.${guest && task.assignee ? " Its owner has been told." : ""}`),
+      view: await storyView(route, state, `${ICON.done} Sent.${guest && task.assignee ? " Its owner has been told." : ""}`),
     });
 
     if (guest) await tellOwner(task, user, text);

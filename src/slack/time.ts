@@ -15,12 +15,12 @@ import {
   carriedNote,
   clip,
   currentSprint,
-  deskStories,
   ownerLabel,
-  peopleOptions,
+  personStoryPickers,
   plain,
   sections,
   sprintLine,
+  storiesFor,
   subtaskIcon,
   sum,
 } from "./desk.js";
@@ -47,20 +47,7 @@ export interface TimeState {
   nonce: string;
 }
 
-export const EVERYONE = "everyone";
-
 export const freshNonce = () => Date.now().toString(36);
-
-/** Stories a person owns, or holds a subtask on. */
-export function storiesFor(route: Route, person: string | null): Task[] {
-  const stories = deskStories(route);
-  if (!person) return stories;
-  if (person === "unassigned") return stories.filter((story) => !story.jira_assignee);
-  return stories.filter(
-    (story) =>
-      story.jira_assignee === person || subtasksFor(story.id).some((subtask) => subtask.jira_assignee === person),
-  );
-}
 
 /**
  * Where a panel opens. Log time starts on your own stories when you have any;
@@ -72,43 +59,8 @@ export function initialTimeState(route: Route, mode: TimeMode, viewer: string, t
   return { mode, routeId: route.id, person, taskId, nonce: freshNonce() };
 }
 
-async function pickers(route: Route, state: TimeState): Promise<KnownBlock> {
-  const people: PlainTextOption[] = [
-    { text: plain("Everyone"), value: EVERYONE },
-    ...(await peopleOptions(deskStories(route))),
-  ].slice(0, 100);
-  const stories: PlainTextOption[] = storiesFor(route, state.person)
-    .slice(0, 100)
-    .map((story) => ({ text: plain(clip(`${story.jira_key} · ${story.title}`, 75)), value: String(story.id) }));
-
-  const personInitial = people.find((option) => option.value === (state.person ?? EVERYONE));
-  const storyInitial = stories.find((option) => option.value === String(state.taskId));
-
-  return {
-    type: "actions",
-    // A new block id when the person changes, so Slack drops the old story pick.
-    block_id: `time_pickers_${state.person ?? EVERYONE}`,
-    elements: [
-      {
-        type: "static_select",
-        action_id: DESK.pickPerson,
-        placeholder: plain("Person"),
-        options: people,
-        ...(personInitial ? { initial_option: personInitial } : {}),
-      },
-      ...(stories.length > 0
-        ? [
-            {
-              type: "static_select" as const,
-              action_id: DESK.pickStory,
-              placeholder: plain("Pick a story…"),
-              options: stories,
-              ...(storyInitial ? { initial_option: storyInitial } : {}),
-            },
-          ]
-        : []),
-    ],
-  };
+function pickers(route: Route, state: TimeState): Promise<KnownBlock> {
+  return personStoryPickers(route, state.person, state.taskId, DESK.pickPerson, DESK.pickStory);
 }
 
 function storyHeader(task: Task, owner: string): KnownBlock[] {

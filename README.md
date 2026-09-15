@@ -213,9 +213,11 @@ name on the board.
 hard to search. Instead:
 
 - The sprint channel gets one pinned **Sprint desk**: counts per group, the
-  latest updates, and dropdowns to pick a story or a person. A story opens a
-  panel with where it is, its subtasks and its updates — never time. Anyone,
-  clients included, can add an update there, and the story's owner gets a DM.
+  latest updates, and two buttons. **Open a story** lets you pick one —
+  narrowed to a person first if the list is long — and shows where it is, its
+  subtasks and its updates, never time. Anyone, clients included, can add an
+  update there, and the story's owner gets a DM. **See a board** shows what one
+  person is working on.
 - The team channel gets a pinned **Team desk**: who's working on what right
   now, totals, and two buttons. **View time** shows the sprint's time, or one
   story's breakdown by subtask and person. **Log time** records time after the

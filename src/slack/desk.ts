@@ -5,7 +5,7 @@ import { mention, userName } from "./names.js";
 import { BUCKET_STYLE, dateRange, dot, ICON, KIND } from "./design.js";
 import { db } from "../db.js";
 import { log } from "../log.js";
-import { ref, type Task } from "../store.js";
+import { getTask, type Task } from "../store.js";
 import { effortFor, formatExact, type WorkSession } from "../sessions.js";
 import { formatSlab } from "../slabs.js";
 import { loggedSeconds } from "../worklogs.js";
@@ -28,8 +28,11 @@ import { latestSnapshot, type BoardSnapshot } from "../jira/sync.js";
  */
 
 export const DESK = {
-  story: "desk_story",
-  person: "desk_person",
+  openStory: "desk_open_story",
+  openBoard: "desk_open_board",
+  storyPickPerson: "story_pick_person",
+  storyPickStory: "story_pick_story",
+  boardPickPerson: "board_pick_person",
   openFromDm: "dm_open_story",
   clientPanel: "client_story_panel",
   viewTime: "team_desk_view_time",
@@ -162,6 +165,77 @@ async function feedLines(events: FeedEvent[]): Promise<string[]> {
 
 // ---- the desk messages ------------------------------------------------------
 
+export const EVERYONE = "everyone";
+
+/** Stories a person owns, or holds a subtask on. `unassigned` means stories nobody owns. */
+export function storiesFor(route: Route, person: string | null): Task[] {
+  const stories = deskStories(route);
+  if (!person) return stories;
+  if (person === "unassigned") return stories.filter((story) => !story.jira_assignee);
+  return stories.filter(
+    (story) =>
+      story.jira_assignee === person || subtasksFor(story.id).some((subtask) => subtask.jira_assignee === person),
+  );
+}
+
+/**
+ * The two dropdowns a story panel starts with: a person, then that person's
+ * stories grouped by where they are on the board. Picking a person narrows the
+ * story list; it never opens anything by itself.
+ */
+export async function personStoryPickers(
+  route: Route,
+  person: string | null,
+  taskId: number | null,
+  personAction: string,
+  storyAction: string,
+): Promise<KnownBlock> {
+  const people: PlainTextOption[] = [
+    { text: plain("Everyone"), value: EVERYONE },
+    ...(await peopleOptions(deskStories(route))),
+  ].slice(0, 100);
+
+  const stories = storiesFor(route, person);
+  let budget = 100; // Slack shows at most 100 options
+  const groups = ORDER.map((bucket) => {
+    const options = stories
+      .filter((story) => bucketOf(story.bucket) === bucket)
+      .slice(0, budget)
+      .map((story) => ({ text: plain(clip(`${story.jira_key} · ${story.title}`, 75)), value: String(story.id) }));
+    budget -= options.length;
+    return { label: plain(`${BUCKET_STYLE[bucket].icon} ${BUCKET_STYLE[bucket].label}`), options };
+  }).filter((group) => group.options.length > 0);
+
+  const personInitial = people.find((option) => option.value === (person ?? EVERYONE));
+  const storyInitial = groups.flatMap((group) => group.options).find((option) => option.value === String(taskId));
+
+  return {
+    type: "actions",
+    // A new block id when the person changes, so Slack drops the old story pick.
+    block_id: `pickers_${person ?? EVERYONE}`,
+    elements: [
+      {
+        type: "static_select",
+        action_id: personAction,
+        placeholder: plain("Person"),
+        options: people,
+        ...(personInitial ? { initial_option: personInitial } : {}),
+      },
+      ...(groups.length > 0
+        ? [
+            {
+              type: "static_select" as const,
+              action_id: storyAction,
+              placeholder: plain("Pick a story…"),
+              option_groups: groups,
+              ...(storyInitial ? { initial_option: storyInitial } : {}),
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
 export async function peopleOptions(stories: Task[]): Promise<PlainTextOption[]> {
   const people = new Map<string, string | null>();
   for (const story of stories) {
@@ -178,20 +252,6 @@ export async function peopleOptions(stories: Task[]): Promise<PlainTextOption[]>
   options.sort((a, b) => a.text.text.localeCompare(b.text.text));
   if (stories.some((story) => !story.jira_assignee)) options.push({ text: plain("Unassigned"), value: "unassigned" });
   return options.slice(0, 100);
-}
-
-function pickers(storyAction: string, personAction: string, people: PlainTextOption[]) {
-  return [
-    {
-      type: "external_select" as const,
-      action_id: storyAction,
-      placeholder: plain("Pick a story…"),
-      min_query_length: 0,
-    },
-    ...(people.length > 0
-      ? [{ type: "static_select" as const, action_id: personAction, placeholder: plain("Pick a person…"), options: people }]
-      : []),
-  ];
 }
 
 async function sprintDeskBlocks(route: Route, stories: Task[]): Promise<KnownBlock[]> {
@@ -219,10 +279,22 @@ async function sprintDeskBlocks(route: Route, stories: Task[]): Promise<KnownBlo
     ...(latestLines.length > 0
       ? [{ type: "section" as const, text: { type: "mrkdwn" as const, text: `*Latest updates*\n${latestLines.join("\n")}` } }]
       : []),
-    { type: "actions", block_id: "desk_pickers", elements: pickers(DESK.story, DESK.person, await peopleOptions(stories)) },
+    {
+      type: "actions",
+      block_id: "desk_buttons",
+      elements: [
+        { type: "button", text: plain("📖 Open a story"), style: "primary", action_id: DESK.openStory, value: String(route.id) },
+        { type: "button", text: plain("👤 See a board"), action_id: DESK.openBoard, value: String(route.id) },
+      ],
+    },
     {
       type: "context",
-      elements: [{ type: "mrkdwn", text: "Pick a story to see where it is and send the team an update, or a person to see their board." }],
+      elements: [
+        {
+          type: "mrkdwn",
+          text: "*Open a story* to see where it is and send the team an update · *See a board* for what one person is working on.",
+        },
+      ],
     },
   ];
 }
@@ -393,42 +465,51 @@ export function refreshDesksFor(task: Task): void {
   if (route) scheduleRoute(route.id);
 }
 
-// ---- the dropdown -------------------------------------------------------------
-
-/** Stories matching what someone typed, grouped by where they are on the board. */
-export function storyOptions(route: Route, query: string) {
-  const needle = query.trim().toLowerCase();
-  const stories = deskStories(route).filter(
-    (story) => !needle || `${story.jira_key} ${story.title}`.toLowerCase().includes(needle),
-  );
-
-  let budget = 100; // Slack shows at most 100 options
-  const groups = ORDER.map((bucket) => {
-    const options = stories
-      .filter((story) => bucketOf(story.bucket) === bucket)
-      .slice(0, budget)
-      .map((story) => ({ text: plain(clip(`${story.jira_key} · ${story.title}`, 75)), value: String(story.id) }));
-    budget -= options.length;
-    return { label: plain(`${BUCKET_STYLE[bucket].icon} ${BUCKET_STYLE[bucket].label}`), options };
-  }).filter((group) => group.options.length > 0);
-
-  return groups.length > 0 ? { option_groups: groups } : { options: [] };
-}
-
 // ---- panels -------------------------------------------------------------------
 
 export function subtaskIcon(subtask: Subtask): string {
   return subtask.done_at ? ICON.done : BUCKET_STYLE[bucketOf(subtask.bucket)].icon;
 }
 
-/** The client-side panel: where a story is, and its updates. Anyone can add one. */
-export async function clientStoryView(task: Task, notice?: string): Promise<View> {
+export interface StoryState {
+  routeId: number;
+  /** A Jira account id, `unassigned`, or null for everyone. */
+  person: string | null;
+  taskId: number | null;
+}
+
+/**
+ * The Sprint desk's story panel: pick a story — narrowed to one person first if
+ * the list is long — to see where it is and its updates. Anyone can add one.
+ */
+export async function storyView(route: Route, state: StoryState, notice?: string): Promise<View> {
+  const task = state.taskId ? getTask(state.taskId) : undefined;
+  const blocks: KnownBlock[] = [];
+  if (notice) blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: notice }] });
+  blocks.push(
+    { type: "section", text: { type: "mrkdwn", text: `📖 *Stories* · ${sprintLine(currentSprint(route))}` } },
+    await personStoryPickers(route, state.person, state.taskId, DESK.storyPickPerson, DESK.storyPickStory),
+  );
+
+  const base = {
+    type: "modal" as const,
+    callback_id: DESK.clientPanel,
+    private_metadata: JSON.stringify(state),
+    title: plain("Stories"),
+    close: plain("Close"),
+  };
+
+  if (!task) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "Pick a story to see where it is and send the team an update." }],
+    });
+    return { ...base, blocks };
+  }
+
   const style = BUCKET_STYLE[bucketOf(task.bucket)];
   const subtasks = subtasksFor(task.id);
-  const blocks: KnownBlock[] = [];
-
-  if (notice) blocks.push({ type: "context", elements: [{ type: "mrkdwn", text: notice }] });
-  blocks.push({ type: "section", text: { type: "mrkdwn", text: `*${task.title}*` } });
+  blocks.push({ type: "divider" }, { type: "section", text: { type: "mrkdwn", text: `*${task.jira_key}* ${task.title}` } });
   blocks.push({
     type: "context",
     elements: [
@@ -462,19 +543,59 @@ export async function clientStoryView(task: Task, notice?: string): Promise<View
     });
   }
 
-  return {
-    type: "modal",
-    callback_id: DESK.clientPanel,
-    private_metadata: JSON.stringify({ taskId: task.id }),
-    title: plain(clip(task.jira_key ?? ref(task), 24)),
-    ...(task.archived_at ? {} : { submit: plain("Send") }),
-    close: plain("Close"),
-    blocks,
-  };
+  return { ...base, ...(task.archived_at ? {} : { submit: plain("Send") }), blocks };
 }
 
-/** One person's sprint, grouped like a board. No time — clients see this. */
-export async function personView(route: Route, accountId: string): Promise<View> {
+/** The Sprint desk's board panel: pick a person to see their sprint, grouped like a board. No time. */
+export async function boardView(route: Route, person: string | null): Promise<View> {
+  const options = await peopleOptions(deskStories(route));
+  const initial = options.find((option) => option.value === person);
+  const header: KnownBlock[] = [
+    { type: "section", text: { type: "mrkdwn", text: `👤 *Boards* · ${sprintLine(currentSprint(route))}` } },
+    ...(options.length > 0
+      ? [
+          {
+            type: "actions" as const,
+            block_id: "board_picker",
+            elements: [
+              {
+                type: "static_select" as const,
+                action_id: DESK.boardPickPerson,
+                placeholder: plain("Pick a person…"),
+                options,
+                ...(initial ? { initial_option: initial } : {}),
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+  const base = {
+    type: "modal" as const,
+    private_metadata: JSON.stringify({ routeId: route.id, person, taskId: null }),
+    title: plain("Boards"),
+    close: plain("Close"),
+  };
+
+  if (!person) {
+    return {
+      ...base,
+      blocks: [
+        ...header,
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: options.length > 0 ? "Pick a person to see what they're working on." : "Nobody has work in this sprint yet.",
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  const accountId = person;
   const stories = deskStories(route);
   const unassigned = accountId === "unassigned";
   const own = stories.filter((story) => (unassigned ? !story.jira_assignee : story.jira_assignee === accountId));
@@ -511,13 +632,13 @@ export async function personView(route: Route, accountId: string): Promise<View>
   }
 
   return {
-    type: "modal",
-    title: plain(clip(name, 24)),
-    close: plain("Close"),
+    ...base,
     blocks: [
-      { type: "section", text: { type: "mrkdwn", text: `${unassigned ? "❔" : "👤"} *${name}* · ${sprintLine(currentSprint(route))}` } },
+      ...header,
+      { type: "divider" },
+      { type: "section", text: { type: "mrkdwn", text: `${unassigned ? "❔" : "👤"} *${name}*` } },
       ...sections(lines.length > 0 ? lines : ["_Nothing here this sprint._"]),
-      { type: "context", elements: [{ type: "mrkdwn", text: "Pick a story from the desk to open it." }] },
+      { type: "context", elements: [{ type: "mrkdwn", text: "Open a story from the desk to see its updates." }] },
     ],
   };
 }
